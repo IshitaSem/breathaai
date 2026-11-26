@@ -1,4 +1,4 @@
-import { AQICategory, PollutantDefinition, PlannerTask, GreenerChoice, CommunityChallenge } from '../types';
+import { AQICategory, PollutantDefinition, PlannerTask, GreenerChoice, CommunityChallenge, ChartDataPoint } from '../types';
 
 export interface CityCoords {
   name: string;
@@ -144,6 +144,23 @@ export const COMMUNITY_CHALLENGES: CommunityChallenge[] = [
   { id: 0, title: 'No-burn week', description: 'Avoid burning waste or leaves for 7 days', participants: 412 },
   { id: 1, title: 'Car-free Friday', description: 'Use public transport or walk every Friday', participants: 287 },
   { id: 2, title: 'Switch off standby', description: 'Unplug idle devices nightly', participants: 356 }
+];
+
+export const COMMUNITY_WEEKLY_DATA: ChartDataPoint[] = [
+  { label: 'Mon', value: 18 },
+  { label: 'Tue', value: 24 },
+  { label: 'Wed', value: 31 },
+  { label: 'Thu', value: 27 },
+  { label: 'Fri', value: 35 },
+  { label: 'Sat', value: 42 },
+  { label: 'Sun', value: 38 },
+];
+
+export const COMMUNITY_MONTHLY_DATA: ChartDataPoint[] = [
+  { label: 'Wk 1', value: 96 },
+  { label: 'Wk 2', value: 118 },
+  { label: 'Wk 3', value: 140 },
+  { label: 'Wk 4', value: 171 },
 ];
 
 export const HOURS_24 = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);

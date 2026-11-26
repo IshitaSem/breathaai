@@ -6,8 +6,6 @@ import {
   ListTodo,
   House,
   Sparkles,
-  MapPin,
-  Clock,
   ArrowUpRight,
   ShieldCheck,
 } from 'lucide-react';
@@ -16,8 +14,40 @@ import { AQICard } from '../components/common/AQICard';
 import { PollutantGrid } from '../components/common/PollutantGrid';
 import { TrendChart } from '../components/charts/TrendChart';
 import { PhotoFrame } from '../components/common/PhotoFrame';
+import { OverviewHero } from '../components/overview/OverviewHero';
 import { PHOTOS } from '../constants/photos';
 import { PLANNER_TASKS } from '../constants/mockData';
+
+const QUICK_CARDS = [
+  {
+    title: 'Air Quality Monitor',
+    subtitle: 'Live pollutants & 7-day trends',
+    path: '/monitor',
+    icon: Wind,
+    photo: PHOTOS.mistyHills,
+  },
+  {
+    title: 'AI Air Assistant',
+    subtitle: 'Ask tailored wellness questions',
+    path: '/assistant',
+    icon: Bot,
+    photo: PHOTOS.morningForest,
+  },
+  {
+    title: 'Daily Action Planner',
+    subtitle: 'Low-emission routine windows',
+    path: '/planner',
+    icon: ListTodo,
+    photo: PHOTOS.sunlitTrail,
+  },
+  {
+    title: 'Indoor Air Care',
+    subtitle: 'Plants, purifiers & ventilation',
+    path: '/indoor',
+    icon: House,
+    photo: PHOTOS.livingRoomPlants,
+  },
+];
 
 export const OverviewPage: React.FC = () => {
   const {
@@ -25,164 +55,72 @@ export const OverviewPage: React.FC = () => {
     airData,
     completedTasksCount,
     totalKgCo2eAvoided,
+    plannerProgressPercent,
   } = useApp();
   const navigate = useNavigate();
 
-  const currentHour = new Date().getHours();
-  const greeting =
-    currentHour < 12
-      ? 'Good morning'
-      : currentHour < 17
-      ? 'Good afternoon'
-      : 'Good evening';
-
-  const formattedDate = new Date().toLocaleDateString(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const { greeting, formattedDate } = useMemo(() => {
+    const now = new Date();
+    const hour = now.getHours();
+    return {
+      greeting:
+        hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening',
+      formattedDate: now.toLocaleDateString(undefined, {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      }),
+    };
+  }, []);
 
   const chartData = useMemo(
     () => airData.hourly.map(h => ({ label: h.hour, value: h.aqi })),
     [airData.hourly]
   );
 
-  const recommendations = [
-    {
-      category: 'Outdoor',
-      text:
-        airData.aqi > 200
-          ? 'Best window is early afternoon (12–3 PM); avoid dawn and evening traffic.'
-          : 'Good outdoor conditions. Regular morning exercise is safe for all groups.',
-    },
-    {
-      category: 'Commute',
-      text: 'Prefer metro, bus or carpool; keep vehicle ventilation set to recirculate.',
-    },
-    {
-      category: 'Indoor',
-      text:
-        airData.aqi > 150
-          ? 'Keep windows shut during rush hours; run HEPA air purifier in bedroom.'
-          : 'Brief natural ventilation is safe during late morning.',
-    },
-    {
-      category: 'Family',
-      text: `Household plan for ${state.fam} members: ${
-        state.sens && state.sens !== 'None'
-          ? `Special precaution for ${state.sens.toLowerCase()}.`
-          : 'Standard clean-air precautions apply.'
-      }`,
-    },
-  ];
-
-  const quickCards = [
-    {
-      title: 'Air Quality Monitor',
-      subtitle: 'Live pollutants & 7-day trends',
-      path: '/monitor',
-      icon: Wind,
-      photo: PHOTOS.mistyHills,
-    },
-    {
-      title: 'AI Air Assistant',
-      subtitle: 'Ask tailored wellness questions',
-      path: '/assistant',
-      icon: Bot,
-      photo: PHOTOS.morningForest,
-    },
-    {
-      title: 'Daily Action Planner',
-      subtitle: 'Low-emission routine windows',
-      path: '/planner',
-      icon: ListTodo,
-      photo: PHOTOS.sunlitTrail,
-    },
-    {
-      title: 'Indoor Air Care',
-      subtitle: 'Plants, purifiers & ventilation',
-      path: '/indoor',
-      icon: House,
-      photo: PHOTOS.livingRoomPlants,
-    },
-  ];
+  const recommendations = useMemo(
+    () => [
+      {
+        category: 'Outdoor',
+        text:
+          airData.aqi > 200
+            ? 'Best window is early afternoon (12–3 PM); avoid dawn and evening traffic.'
+            : 'Good outdoor conditions. Regular morning exercise is safe for all groups.',
+      },
+      {
+        category: 'Commute',
+        text: 'Prefer metro, bus or carpool; keep vehicle ventilation set to recirculate.',
+      },
+      {
+        category: 'Indoor',
+        text:
+          airData.aqi > 150
+            ? 'Keep windows shut during rush hours; run HEPA air purifier in bedroom.'
+            : 'Brief natural ventilation is safe during late morning.',
+      },
+      {
+        category: 'Family',
+        text: `Household plan for ${state.fam} members: ${
+          state.sens && state.sens !== 'None'
+            ? `Special precaution for ${state.sens.toLowerCase()}.`
+            : 'Standard clean-air precautions apply.'
+        }`,
+      },
+    ],
+    [airData.aqi, state.fam, state.sens]
+  );
 
   const totalTasks = PLANNER_TASKS.length;
-  const progressPercent = Math.min(100, Math.round((completedTasksCount / totalTasks) * 100));
 
   return (
     <div className="space-y-7">
-      {/* Editorial Nature Hero Banner */}
-      <PhotoFrame
-        photo={PHOTOS.heroCanopy}
-        className="rounded-3xl min-h-[220px] md:min-h-[250px] shadow-editorial border border-line/60"
-        overlayClassName="bg-gradient-to-r from-[#173F35]/90 via-[#173F35]/70 to-[#173F35]/35"
-      >
-        <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 h-full min-h-[220px] md:min-h-[250px]">
-          <div className="max-w-xl text-[#F8F7F2] space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-medium text-[#E5EFE7] border border-white/15">
-              <MapPin size={12} />
-              <span>{airData.loc}</span>
-              <span>·</span>
-              <span>{formattedDate}</span>
-            </div>
-
-            <h1 className="text-3xl md:text-4xl font-display font-bold text-[#F8F7F2] tracking-tight leading-tight">
-              Breathe better. Live lighter.
-            </h1>
-
-            <p className="text-sm md:text-base text-[#E5EFE7]/90 leading-relaxed max-w-lg">
-              {greeting}, <span className="font-semibold text-white">{state.name || 'Friend'}</span>.{' '}
-              Welcome to Aireolifye — your intelligent urban air quality companion. Air in{' '}
-              {airData.loc} is currently{' '}
-              <span className="font-semibold text-white underline decoration-[#A9BFA8] underline-offset-4">
-                {airData.category.name.toLowerCase()}
-              </span>
-              . {airData.category.advice}
-            </p>
-
-            <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-[#E5EFE7]/85">
-              <span className="inline-flex items-center gap-1.5">
-                <Clock size={13} />
-                Last updated {airData.lastUpdated}
-              </span>
-              <span>·</span>
-              <span>{airData.isLive ? 'Live Open-Meteo CAMS Feed' : 'Benchmark Baseline'}</span>
-            </div>
-          </div>
-
-          {/* Floating Hero AQI Pill */}
-          <div className="bg-[#F8F7F2]/95 dark:bg-[#162621]/95 backdrop-blur-md rounded-2xl p-5 min-w-[210px] shadow-elevated border border-white/40 text-ink self-stretch md:self-auto flex flex-col justify-between">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-mute">
-                Current NAQI
-              </span>
-              <span
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: airData.category.color }}
-              />
-            </div>
-            <div className="flex items-baseline gap-2.5 my-2">
-              <span
-                className="font-display text-5xl font-bold tabular-nums leading-none"
-                style={{ color: airData.category.color }}
-              >
-                {airData.aqi}
-              </span>
-              <span
-                className="badge text-xs"
-                style={{ backgroundColor: airData.category.color, color: '#ffffff' }}
-              >
-                {airData.category.name}
-              </span>
-            </div>
-            <div className="text-xs text-mute">
-              Primary driver: <strong className="text-ink">{airData.dominantPollutant || 'PM2.5'}</strong>
-            </div>
-          </div>
-        </div>
-      </PhotoFrame>
+      <OverviewHero
+        airData={airData}
+        userName={state.name}
+        greeting={greeting}
+        formattedDate={formattedDate}
+      />
 
       {/* AI Air Intelligence Summary */}
       <div className="card bg-forest-mint/60 border-sage/40">
@@ -212,7 +150,7 @@ export const OverviewPage: React.FC = () => {
           <span className="text-xs text-mute">Curated daily modules</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {quickCards.map(card => {
+          {QUICK_CARDS.map(card => {
             const Icon = card.icon;
             return (
               <button
@@ -288,8 +226,8 @@ export const OverviewPage: React.FC = () => {
             <ShieldCheck size={18} className="text-forest" />
           </div>
           <div className="divide-y divide-line/70">
-            {recommendations.map((r, i) => (
-              <div key={i} className="chk">
+            {recommendations.map(r => (
+              <div key={r.category} className="chk">
                 <span className="badge flex-shrink-0">{r.category}</span>
                 <span className="text-sm leading-relaxed">{r.text}</span>
               </div>
@@ -316,7 +254,7 @@ export const OverviewPage: React.FC = () => {
             </div>
 
             <div className="bar mt-5">
-              <i style={{ width: `${progressPercent}%` }} />
+              <i style={{ width: `${plannerProgressPercent}%` }} />
             </div>
 
             <div className="mt-4">

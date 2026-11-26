@@ -7,13 +7,20 @@ import { PhotoFrame } from '../components/common/PhotoFrame';
 import { PHOTOS } from '../constants/photos';
 
 const SUGGESTED_PROMPTS = [
-  { label: 'Is it safe to go outside today?', icon: Sun, tag: 'Outdoor' },
-  { label: 'How can I protect my family from winter smog?', icon: Shield, tag: 'Family' },
-  { label: 'When should I exercise outdoors?', icon: HeartPulse, tag: 'Fitness' },
-  { label: 'How can I improve my indoor air quality?', icon: Home, tag: 'Indoor' },
-  { label: 'What should I do when PM2.5 is high?', icon: Wind, tag: 'PM2.5' },
-  { label: 'How can I reduce my pollution contribution?', icon: Leaf, tag: 'Action' },
+  { label: 'Is it safe to go outside today?', icon: Sun },
+  { label: 'How can I protect my family from winter smog?', icon: Shield },
+  { label: 'When should I exercise outdoors?', icon: HeartPulse },
+  { label: 'How can I improve my indoor air quality?', icon: Home },
+  { label: 'What should I do when PM2.5 is high?', icon: Wind },
+  { label: 'How can I reduce my pollution contribution?', icon: Leaf },
 ];
+
+let messageSeq = 0;
+
+function createMessageId(role: 'u' | 'a'): string {
+  messageSeq += 1;
+  return `${role}-${Date.now()}-${messageSeq}`;
+}
 
 export const AssistantPage: React.FC = () => {
   const {
@@ -29,15 +36,14 @@ export const AssistantPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   useEffect(() => {
-    scrollToBottom();
+    if (chatMessages.length > 0 || loading) {
+      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [chatMessages, loading]);
 
   const handleSend = async (questionText?: string) => {
+    if (loading) return;
     const q = (questionText || inputVal).trim();
     if (!q) {
       showToast('Please type a question first');
@@ -45,7 +51,7 @@ export const AssistantPage: React.FC = () => {
     }
 
     const userMsg: ChatMessage = {
-      id: `u-${Date.now()}`,
+      id: createMessageId('u'),
       role: 'u',
       text: q,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -67,7 +73,7 @@ export const AssistantPage: React.FC = () => {
       });
 
       const aiMsg: ChatMessage = {
-        id: `a-${Date.now()}`,
+        id: createMessageId('a'),
         role: 'a',
         text: res.text,
         cards: res.cards,
@@ -78,7 +84,7 @@ export const AssistantPage: React.FC = () => {
       addChatMessage(aiMsg);
     } catch {
       addChatMessage({
-        id: `a-${Date.now()}`,
+        id: createMessageId('a'),
         role: 'a',
         text: 'Sorry, I encountered an issue connecting to the AI air intelligence service. Please try again.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -141,7 +147,7 @@ export const AssistantPage: React.FC = () => {
                 {m.cards && m.cards.length > 0 && (
                   <div className="space-y-2 mt-3">
                     {m.cards.map(([title, why], idx) => (
-                      <div key={idx} className="rc">
+                      <div key={`${m.id}-${title}-${idx}`} className="rc">
                         <b className="text-ink font-display">{title}</b>
                         <div className="sub text-xs mt-1 leading-relaxed">
                           <strong className="text-forest">Why:</strong> {why}
@@ -180,11 +186,11 @@ export const AssistantPage: React.FC = () => {
             Suggested Questions
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-            {SUGGESTED_PROMPTS.map((item, idx) => {
+            {SUGGESTED_PROMPTS.map(item => {
               const Icon = item.icon;
               return (
                 <button
-                  key={idx}
+                  key={item.label}
                   type="button"
                   className="chip flex items-start gap-2.5"
                   disabled={loading}

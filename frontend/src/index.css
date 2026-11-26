@@ -132,31 +132,6 @@ aside.bw-sidebar.c .lb {
   display: none;
 }
 
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  font-family: "DM Sans", "Inter", sans-serif;
-  font-weight: 700;
-  padding: 4px 8px 18px;
-  font-size: 18px;
-  letter-spacing: -0.02em;
-  white-space: nowrap;
-  color: var(--g);
-}
-
-.logo-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 11px;
-  background: #173F35;
-  color: #F8F7F2;
-  display: grid;
-  place-items: center;
-  flex: none;
-  box-shadow: 0 3px 10px rgba(23, 63, 53, 0.2);
-}
-
 .nv {
   display: flex;
   align-items: center;
@@ -377,10 +352,6 @@ h3 {
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-}
-
-.mt {
-  margin-top: 16px;
 }
 
 .badge {

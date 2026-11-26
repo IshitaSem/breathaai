@@ -1,4 +1,4 @@
-import { ChatMessage } from '../types';
+import { ChatMessage, ThemeMode } from '../types';
 
 export interface StoredAppState {
   name: string;
@@ -20,8 +20,10 @@ export interface StoredAppState {
   chat: ChatMessage[];
   joined: Record<number, boolean>;
   col: boolean;
-  theme: 'auto' | 'light' | 'dark';
+  theme: ThemeMode;
 }
+
+const VALID_THEMES: ReadonlySet<ThemeMode> = new Set(['auto', 'light', 'dark']);
 
 export const DEFAULT_STATE: StoredAppState = {
   name: 'Ishita',
@@ -52,15 +54,29 @@ export function loadStoredState(): StoredAppState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_STATE;
-    const parsed = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return DEFAULT_STATE;
+    }
+    const record = parsed as Partial<StoredAppState>;
+    const validTheme = VALID_THEMES.has(record.theme as ThemeMode)
+      ? (record.theme as ThemeMode)
+      : DEFAULT_STATE.theme;
+    const validFam =
+      typeof record.fam === 'number' && Number.isInteger(record.fam) && record.fam >= 1 && record.fam <= 20
+        ? record.fam
+        : DEFAULT_STATE.fam;
+
     return {
       ...DEFAULT_STATE,
-      ...parsed,
-      nt: { ...DEFAULT_STATE.nt, ...(parsed.nt || {}) },
-      priv: { ...DEFAULT_STATE.priv, ...(parsed.priv || {}) },
-      done: parsed.done || {},
-      chat: Array.isArray(parsed.chat) ? parsed.chat : [],
-      joined: parsed.joined || {},
+      ...record,
+      fam: validFam,
+      theme: validTheme,
+      nt: { ...DEFAULT_STATE.nt, ...(record.nt || {}) },
+      priv: { ...DEFAULT_STATE.priv, ...(record.priv || {}) },
+      done: record.done || {},
+      chat: Array.isArray(record.chat) ? record.chat : [],
+      joined: record.joined || {},
     };
   } catch (err) {
     console.warn('Error reading from localStorage', err);

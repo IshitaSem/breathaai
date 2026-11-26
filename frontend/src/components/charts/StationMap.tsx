@@ -23,11 +23,11 @@ export const StationMap: React.FC<StationMapProps> = ({ stations }) => {
             opacity="0.55"
           />
 
-          {stations.map((stn, idx) => {
+          {stations.map(stn => {
             const cx = stn.x * 300;
             const cy = stn.y * 180;
             return (
-              <g key={idx}>
+              <g key={stn.name}>
                 <circle
                   cx={cx}
                   cy={cy}
@@ -64,8 +64,8 @@ export const StationMap: React.FC<StationMapProps> = ({ stations }) => {
           </tr>
         </thead>
         <tbody>
-          {stations.map((stn, idx) => (
-            <tr key={idx}>
+          {stations.map(stn => (
+            <tr key={stn.name}>
               <td className="font-medium">{stn.name}</td>
               <td className="font-display font-bold" style={{ color: stn.color }}>
                 {stn.aqi}

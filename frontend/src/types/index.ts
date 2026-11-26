@@ -1,5 +1,12 @@
 export type PollutantKey = 'pm25' | 'pm10' | 'no2' | 'so2' | 'co' | 'o3';
 
+export type ThemeMode = 'auto' | 'light' | 'dark';
+
+export interface ChartDataPoint {
+  label: string;
+  value: number;
+}
+
 export interface PollutantDefinition {
   key: PollutantKey;
   name: string;
@@ -72,14 +79,27 @@ export interface AirQualityData {
   modelProvider?: string;
   modelResolution?: string;
   averagingMethod?: string;
+  dataClassification?: string;
   cpcbSufficient?: boolean;
   averagingCoverageComplete?: boolean | null;
   coordinates?: { latitude: number; longitude: number };
 }
 
-export interface RecommendationCard {
-  title: string;
-  why: string;
+export interface ChatContext {
+  loc: string;
+  aqi: number;
+  pm25: number;
+  pm10: number;
+  fam: number;
+  sens: string;
+  life: string;
+}
+
+export interface AssistantReply {
+  text: string;
+  cards: [string, string][];
+  isLiveGenAI: boolean;
+  modelUsed: string;
 }
 
 export interface ChatMessage {
@@ -87,7 +107,6 @@ export interface ChatMessage {
   role: 'u' | 'a';
   text: string;
   cards?: [string, string][];
-  loading?: boolean;
   isLiveGenAI?: boolean;
   timestamp?: string;
 }
@@ -108,7 +127,7 @@ export interface UserPreferences {
     share: boolean;
     anon: boolean;
   };
-  theme: 'auto' | 'light' | 'dark';
+  theme: ThemeMode;
   col: boolean;
 }
 

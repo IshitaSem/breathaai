@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -8,9 +8,16 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
+import { ChartDataPoint } from '../../types';
+import {
+  CHART_AXIS_PROPS,
+  CHART_GRID_PROPS,
+  CHART_MARGIN,
+  CHART_TOOLTIP_STYLE,
+} from './chartTheme';
 
 interface TrendChartProps {
-  data: { label: string; value: number }[];
+  data: ChartDataPoint[];
   color?: string;
   unit?: string;
 }
@@ -20,6 +27,8 @@ export const TrendChart: React.FC<TrendChartProps> = React.memo(({
   color = 'var(--g)',
   unit = 'AQI',
 }) => {
+  const gradientId = useId();
+
   if (!data || data.length === 0) {
     return <div className="empty">No trend data available</div>;
   }
@@ -31,41 +40,22 @@ export const TrendChart: React.FC<TrendChartProps> = React.memo(({
   return (
     <div style={{ width: '100%', height: 220 }}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart
-          data={data}
-          margin={{ top: 12, right: 16, left: -14, bottom: 4 }}
-        >
+        <AreaChart data={data} margin={CHART_MARGIN}>
           <defs>
-            <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor={color} stopOpacity={0.22} />
               <stop offset="95%" stopColor={color} stopOpacity={0.01} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
+          <CartesianGrid {...CHART_GRID_PROPS} />
           <XAxis
             dataKey="label"
-            stroke="var(--mute)"
-            fontSize={11}
-            tickLine={false}
-            axisLine={{ stroke: 'var(--line)' }}
+            {...CHART_AXIS_PROPS}
             interval={data.length > 12 ? 3 : 0}
           />
-          <YAxis
-            stroke="var(--mute)"
-            fontSize={11}
-            tickLine={false}
-            axisLine={{ stroke: 'var(--line)' }}
-            domain={[0, yDomainMax]}
-          />
+          <YAxis {...CHART_AXIS_PROPS} domain={[0, yDomainMax]} />
           <Tooltip
-            contentStyle={{
-              backgroundColor: 'var(--card)',
-              borderColor: 'var(--line)',
-              borderRadius: '14px',
-              boxShadow: '0 8px 24px rgba(23, 63, 53, 0.12)',
-              fontSize: '12px',
-              color: 'var(--ink)',
-            }}
+            contentStyle={CHART_TOOLTIP_STYLE}
             formatter={(val: number) => [`${val} ${unit}`, 'Air Quality']}
             labelFormatter={(label: string) => `Time / Period: ${label}`}
           />
@@ -75,7 +65,7 @@ export const TrendChart: React.FC<TrendChartProps> = React.memo(({
             stroke={color}
             strokeWidth={2.5}
             fillOpacity={1}
-            fill="url(#trendGradient)"
+            fill={`url(#${gradientId})`}
             dot={{ r: data.length > 12 ? 2 : 3.5, fill: color }}
             activeDot={{ r: 5, stroke: 'var(--card)', strokeWidth: 2 }}
           />

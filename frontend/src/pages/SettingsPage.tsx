@@ -1,13 +1,66 @@
 import React, { useState, useEffect } from 'react';
 import { Sliders, CheckCircle, RotateCcw, User, Bell, Shield, Palette } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { useTheme } from '../context/ThemeContext';
 import { SUPPORTED_CITIES } from '../constants/mockData';
+import { StoredAppState } from '../services/storage';
+import { ThemeMode } from '../types';
 
 interface FormErrors {
   name?: string;
   email?: string;
   fam?: string;
+}
+
+interface SettingsFormState {
+  name: string;
+  email: string;
+  loc: string;
+  fam: string;
+  life: string;
+  sens: string;
+  alertNotif: boolean;
+  dailyNotif: boolean;
+  weeklyNotif: boolean;
+  shareImpact: boolean;
+  anonLeaderboard: boolean;
+  theme: ThemeMode;
+}
+
+const COMMUTE_OPTIONS = [
+  'Mixed commute',
+  'Work from home',
+  'Daily driver',
+  'Public transport user',
+] as const;
+
+const SENSITIVITY_OPTIONS = [
+  'None',
+  'Children / elderly at home',
+  'Asthma or lung condition',
+  'Heart condition',
+] as const;
+
+const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
+  { value: 'auto', label: 'System Default (Automatic)' },
+  { value: 'light', label: 'Warm Editorial Light' },
+  { value: 'dark', label: 'Botanical Dark' },
+];
+
+function toFormState(state: StoredAppState): SettingsFormState {
+  return {
+    name: state.name,
+    email: state.email,
+    loc: state.loc,
+    fam: String(state.fam),
+    life: state.life,
+    sens: state.sens,
+    alertNotif: state.nt.alert,
+    dailyNotif: state.nt.daily,
+    weeklyNotif: state.nt.weekly,
+    shareImpact: state.priv.share,
+    anonLeaderboard: state.priv.anon,
+    theme: state.theme || 'auto',
+  };
 }
 
 interface ToggleRowProps {
@@ -34,49 +87,34 @@ const ToggleRow: React.FC<ToggleRowProps> = ({ label, description, checked, onCh
 
 export const SettingsPage: React.FC = () => {
   const { state, updateUserPreferences, resetAllSettings, showToast } = useApp();
-  const { setTheme } = useTheme();
-
-  const [name, setName] = useState(state.name);
-  const [email, setEmail] = useState(state.email);
-  const [loc, setLoc] = useState(state.loc);
-  const [fam, setFam] = useState(String(state.fam));
-  const [life, setLife] = useState(state.life);
-  const [sens, setSens] = useState(state.sens);
-
-  const [alertNotif, setAlertNotif] = useState(state.nt.alert);
-  const [dailyNotif, setDailyNotif] = useState(state.nt.daily);
-  const [weeklyNotif, setWeeklyNotif] = useState(state.nt.weekly);
-
-  const [shareImpact, setShareImpact] = useState(state.priv.share);
-  const [anonLeaderboard, setAnonLeaderboard] = useState(state.priv.anon);
-
-  const [selectedTheme, setSelectedTheme] = useState<'auto' | 'light' | 'dark'>(
-    state.theme || 'auto'
-  );
+  const [form, setForm] = useState<SettingsFormState>(() => toFormState(state));
   const [errors, setErrors] = useState<FormErrors>({});
 
   useEffect(() => {
-    setName(state.name);
-    setEmail(state.email);
-    setLoc(state.loc);
-    setFam(String(state.fam));
-    setLife(state.life);
-    setSens(state.sens);
-    setAlertNotif(state.nt.alert);
-    setDailyNotif(state.nt.daily);
-    setWeeklyNotif(state.nt.weekly);
-    setShareImpact(state.priv.share);
-    setAnonLeaderboard(state.priv.anon);
-    setSelectedTheme(state.theme || 'auto');
-  }, [state]);
+    setForm(toFormState(state));
+  }, [
+    state.name,
+    state.email,
+    state.loc,
+    state.fam,
+    state.life,
+    state.sens,
+    state.nt,
+    state.priv,
+    state.theme,
+  ]);
+
+  const updateField = <K extends keyof SettingsFormState>(key: K, value: SettingsFormState[K]) => {
+    setForm(prev => ({ ...prev, [key]: value }));
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
 
     const newErrors: FormErrors = {};
-    const trimmedName = name.trim();
-    const trimmedEmail = email.trim();
-    const parsedFam = Number(fam);
+    const trimmedName = form.name.trim();
+    const trimmedEmail = form.email.trim();
+    const parsedFam = Number(form.fam);
 
     if (!trimmedName) {
       newErrors.name = 'Name is required.';
@@ -100,29 +138,23 @@ export const SettingsPage: React.FC = () => {
     updateUserPreferences({
       name: trimmedName,
       email: trimmedEmail,
-      loc,
+      loc: form.loc,
       fam: parsedFam,
-      life,
-      sens,
-      theme: selectedTheme,
+      life: form.life,
+      sens: form.sens,
+      theme: form.theme,
       nt: {
-        alert: alertNotif,
-        daily: dailyNotif,
-        weekly: weeklyNotif,
+        alert: form.alertNotif,
+        daily: form.dailyNotif,
+        weekly: form.weeklyNotif,
       },
       priv: {
-        share: shareImpact,
-        anon: anonLeaderboard,
+        share: form.shareImpact,
+        anon: form.anonLeaderboard,
       },
     });
 
-    setTheme(selectedTheme);
     showToast('Settings successfully updated');
-  };
-
-  const handleReset = () => {
-    resetAllSettings();
-    setTheme('auto');
   };
 
   return (
@@ -156,8 +188,8 @@ export const SettingsPage: React.FC = () => {
                 id="sn"
                 type="text"
                 className="in"
-                value={name}
-                onChange={e => setName(e.target.value)}
+                value={form.name}
+                onChange={e => updateField('name', e.target.value)}
                 placeholder="e.g. Ishita"
               />
               <div className="err">{errors.name}</div>
@@ -169,8 +201,8 @@ export const SettingsPage: React.FC = () => {
                 id="se"
                 type="email"
                 className="in"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
+                value={form.email}
+                onChange={e => updateField('email', e.target.value)}
                 placeholder="you@domain.com"
               />
               <div className="err">{errors.email}</div>
@@ -182,8 +214,8 @@ export const SettingsPage: React.FC = () => {
                 <select
                   id="sl"
                   className="in"
-                  value={loc}
-                  onChange={e => setLoc(e.target.value)}
+                  value={form.loc}
+                  onChange={e => updateField('loc', e.target.value)}
                 >
                   {Object.keys(SUPPORTED_CITIES).map(city => (
                     <option key={city} value={city}>
@@ -201,8 +233,8 @@ export const SettingsPage: React.FC = () => {
                   min="1"
                   max="20"
                   className="in"
-                  value={fam}
-                  onChange={e => setFam(e.target.value)}
+                  value={form.fam}
+                  onChange={e => updateField('fam', e.target.value)}
                 />
                 <div className="err">{errors.fam}</div>
               </div>
@@ -213,15 +245,10 @@ export const SettingsPage: React.FC = () => {
               <select
                 id="sy"
                 className="in"
-                value={life}
-                onChange={e => setLife(e.target.value)}
+                value={form.life}
+                onChange={e => updateField('life', e.target.value)}
               >
-                {[
-                  'Mixed commute',
-                  'Work from home',
-                  'Daily driver',
-                  'Public transport user',
-                ].map(opt => (
+                {COMMUTE_OPTIONS.map(opt => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>
@@ -234,15 +261,10 @@ export const SettingsPage: React.FC = () => {
               <select
                 id="ss"
                 className="in"
-                value={sens}
-                onChange={e => setSens(e.target.value)}
+                value={form.sens}
+                onChange={e => updateField('sens', e.target.value)}
               >
-                {[
-                  'None',
-                  'Children / elderly at home',
-                  'Asthma or lung condition',
-                  'Heart condition',
-                ].map(opt => (
+                {SENSITIVITY_OPTIONS.map(opt => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>
@@ -262,20 +284,20 @@ export const SettingsPage: React.FC = () => {
                 <ToggleRow
                   label="Severe Air Alerts"
                   description="Notify when AQI exceeds 200 (Poor or worse)"
-                  checked={alertNotif}
-                  onChange={setAlertNotif}
+                  checked={form.alertNotif}
+                  onChange={val => updateField('alertNotif', val)}
                 />
                 <ToggleRow
                   label="Daily Morning Summary"
                   description="Clean-air outdoor window & morning briefing"
-                  checked={dailyNotif}
-                  onChange={setDailyNotif}
+                  checked={form.dailyNotif}
+                  onChange={val => updateField('dailyNotif', val)}
                 />
                 <ToggleRow
                   label="Weekly Carbon Impact Report"
                   description="Summary of avoided CO₂e from completed routines"
-                  checked={weeklyNotif}
-                  onChange={setWeeklyNotif}
+                  checked={form.weeklyNotif}
+                  onChange={val => updateField('weeklyNotif', val)}
                 />
               </div>
             </div>
@@ -289,14 +311,14 @@ export const SettingsPage: React.FC = () => {
                 <ToggleRow
                   label="Share Anonymous Carbon Savings"
                   description="Include your avoided emissions in community totals"
-                  checked={shareImpact}
-                  onChange={setShareImpact}
+                  checked={form.shareImpact}
+                  onChange={val => updateField('shareImpact', val)}
                 />
                 <ToggleRow
                   label="Anonymous Leaderboard Display"
                   description="Keep your profile identity hidden on challenge boards"
-                  checked={anonLeaderboard}
-                  onChange={setAnonLeaderboard}
+                  checked={form.anonLeaderboard}
+                  onChange={val => updateField('anonLeaderboard', val)}
                 />
               </div>
 
@@ -308,12 +330,14 @@ export const SettingsPage: React.FC = () => {
                 <select
                   id="th"
                   className="in w-full"
-                  value={selectedTheme}
-                  onChange={e => setSelectedTheme(e.target.value as 'auto' | 'light' | 'dark')}
+                  value={form.theme}
+                  onChange={e => updateField('theme', e.target.value as ThemeMode)}
                 >
-                  <option value="auto">System Default (Automatic)</option>
-                  <option value="light">Warm Editorial Light</option>
-                  <option value="dark">Botanical Dark</option>
+                  {THEME_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -326,7 +350,7 @@ export const SettingsPage: React.FC = () => {
             Changes are saved locally and synced with the backend when available.
           </span>
           <div className="row">
-            <button type="button" className="btn o" onClick={handleReset}>
+            <button type="button" className="btn o" onClick={resetAllSettings}>
               <RotateCcw size={16} />
               Reset Defaults
             </button>

@@ -36,12 +36,6 @@ export const PHOTOS: Record<string, CuratedPhoto> = {
     credit: 'Unsplash · Urban Haze',
     fallbackGradient: 'linear-gradient(135deg, #26332E 0%, #7A8780 65%, #C98268 100%)',
   },
-  cityAerial: {
-    url: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1400&q=80',
-    alt: 'Metropolitan city skyline at dusk',
-    credit: 'Unsplash · Cityscape',
-    fallbackGradient: 'linear-gradient(135deg, #26332E 0%, #465751 100%)',
-  },
   livingRoomPlants: {
     url: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1200&q=80',
     alt: 'Minimalist warm living room with natural light and indoor greenery',

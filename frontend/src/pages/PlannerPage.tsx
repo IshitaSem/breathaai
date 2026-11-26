@@ -13,6 +13,7 @@ export const PlannerPage: React.FC = () => {
     resetDayTasks,
     completedTasksCount,
     totalKgCo2eAvoided,
+    plannerProgressPercent,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'All' | 'Morning' | 'Afternoon' | 'Evening'>('All');
@@ -25,7 +26,6 @@ export const PlannerPage: React.FC = () => {
       : '10:00 AM – 5:00 PM (optimal air quality window)';
 
   const totalTasks = PLANNER_TASKS.length;
-  const progressPercent = Math.min(100, Math.round((completedTasksCount / totalTasks) * 100));
 
   const filteredTasks = PLANNER_TASKS.filter(
     t => activeTab === 'All' || t.timeOfDay === activeTab
@@ -76,9 +76,9 @@ export const PlannerPage: React.FC = () => {
 
       {/* Visual Routine Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {routineCards.map((item, idx) => (
+        {routineCards.map(item => (
           <div
-            key={idx}
+            key={item.title}
             className="rounded-2xl overflow-hidden bg-card border border-line shadow-subtle flex flex-col"
           >
             <PhotoFrame
@@ -116,7 +116,7 @@ export const PlannerPage: React.FC = () => {
 
             <h2 className="mt-6 mb-2">Daily Progress</h2>
             <div className="bar">
-              <i style={{ width: `${progressPercent}%` }} />
+              <i style={{ width: `${plannerProgressPercent}%` }} />
             </div>
 
             <div className="flex justify-between items-center text-sm font-medium mt-3">

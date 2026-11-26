@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { Users, Trophy, Award, Sparkles } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ComparisonChart } from '../components/charts/ComparisonChart';
-import { COMMUNITY_CHALLENGES } from '../constants/mockData';
+import {
+  COMMUNITY_CHALLENGES,
+  COMMUNITY_MONTHLY_DATA,
+  COMMUNITY_WEEKLY_DATA,
+} from '../constants/mockData';
 import { PhotoFrame } from '../components/common/PhotoFrame';
 import { PHOTOS, CuratedPhoto } from '../constants/photos';
 
@@ -11,23 +15,6 @@ const CHALLENGE_PHOTOS: Record<number, CuratedPhoto> = {
   1: PHOTOS.cyclingCity,
   2: PHOTOS.urbanPark,
 };
-
-const WEEKLY_DATA = [
-  { label: 'Mon', value: 18 },
-  { label: 'Tue', value: 24 },
-  { label: 'Wed', value: 31 },
-  { label: 'Thu', value: 27 },
-  { label: 'Fri', value: 35 },
-  { label: 'Sat', value: 42 },
-  { label: 'Sun', value: 38 },
-];
-
-const MONTHLY_DATA = [
-  { label: 'Wk 1', value: 96 },
-  { label: 'Wk 2', value: 118 },
-  { label: 'Wk 3', value: 140 },
-  { label: 'Wk 4', value: 171 },
-];
 
 export const CommunityPage: React.FC = () => {
   const {
@@ -39,7 +26,7 @@ export const CommunityPage: React.FC = () => {
 
   const [timeframe, setTimeframe] = useState<'Weekly' | 'Monthly'>('Weekly');
 
-  const activeChartData = timeframe === 'Weekly' ? WEEKLY_DATA : MONTHLY_DATA;
+  const activeChartData = timeframe === 'Weekly' ? COMMUNITY_WEEKLY_DATA : COMMUNITY_MONTHLY_DATA;
   const totalBaseAvoided = activeChartData.reduce((acc, curr) => acc + curr.value, 0);
   const totalCommunityKg = Math.round(totalBaseAvoided + totalKgCo2eAvoided);
   const totalUserWeeklyActions = completedTasksCount + 21;

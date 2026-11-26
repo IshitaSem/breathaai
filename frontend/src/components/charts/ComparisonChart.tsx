@@ -8,9 +8,16 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
+import { ChartDataPoint } from '../../types';
+import {
+  CHART_AXIS_PROPS,
+  CHART_GRID_PROPS,
+  CHART_MARGIN,
+  CHART_TOOLTIP_STYLE,
+} from './chartTheme';
 
 interface ComparisonChartProps {
-  data: { label: string; value: number }[];
+  data: ChartDataPoint[];
   color?: string;
   unit?: string;
 }
@@ -31,34 +38,12 @@ export const ComparisonChart: React.FC<ComparisonChartProps> = React.memo(({
   return (
     <div style={{ width: '100%', height: 220 }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={data}
-          margin={{ top: 12, right: 16, left: -14, bottom: 4 }}
-        >
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
-          <XAxis
-            dataKey="label"
-            stroke="var(--mute)"
-            fontSize={11}
-            tickLine={false}
-            axisLine={{ stroke: 'var(--line)' }}
-          />
-          <YAxis
-            stroke="var(--mute)"
-            fontSize={11}
-            tickLine={false}
-            axisLine={{ stroke: 'var(--line)' }}
-            domain={[0, yDomainMax]}
-          />
+        <BarChart data={data} margin={CHART_MARGIN}>
+          <CartesianGrid {...CHART_GRID_PROPS} />
+          <XAxis dataKey="label" {...CHART_AXIS_PROPS} />
+          <YAxis {...CHART_AXIS_PROPS} domain={[0, yDomainMax]} />
           <Tooltip
-            contentStyle={{
-              backgroundColor: 'var(--card)',
-              borderColor: 'var(--line)',
-              borderRadius: '14px',
-              boxShadow: '0 8px 24px rgba(23, 63, 53, 0.12)',
-              fontSize: '12px',
-              color: 'var(--ink)',
-            }}
+            contentStyle={CHART_TOOLTIP_STYLE}
             formatter={(val: number) => [`${val} ${unit}`, 'Value']}
           />
           <Bar

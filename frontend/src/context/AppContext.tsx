@@ -37,13 +37,30 @@ interface AppContextType {
   showToast: (msg: string) => void;
   completedTasksCount: number;
   totalKgCo2eAvoided: number;
+  plannerProgressPercent: number;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+function extractSettingsPayload(state: StoredAppState): Omit<UserPreferences, 'col'> {
+  return {
+    name: state.name,
+    email: state.email,
+    loc: state.loc,
+    fam: state.fam,
+    life: state.life,
+    sens: state.sens,
+    theme: state.theme,
+    nt: state.nt,
+    priv: state.priv,
+  };
+}
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { setTheme } = useTheme();
   const [state, setState] = useState<StoredAppState>(() => loadStoredState());
+  const stateRef = useRef<StoredAppState>(state);
+
   const [airData, setAirData] = useState<AirQualityData>(() => getDemoAirQuality(state.loc || 'Ludhiana'));
   const [loadingAir, setLoadingAir] = useState<boolean>(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
@@ -52,13 +69,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const airRequestIdRef = useRef<number>(0);
   const isInitialMountRef = useRef<boolean>(true);
 
-  // Sync persisted theme preference on initial mount
   useEffect(() => {
-    if (state.theme) {
-      setTheme(state.theme);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    stateRef.current = state;
+  }, [state]);
+
+  // Sync persisted theme preference on initial mount and whenever theme setting changes
+  useEffect(() => {
+    setTheme(state.theme || 'auto');
+  }, [state.theme, setTheme]);
 
   // Sync state changes to localStorage (skip redundant write on initial mount)
   useEffect(() => {
@@ -114,32 +132,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     refreshAirData(state.loc);
   }, [state.loc, refreshAirData]);
 
+  // Apply pure functional updates to React state while tracking next snapshot for side effects
+  const applyStateUpdate = useCallback(
+    (updater: (prev: StoredAppState) => StoredAppState): StoredAppState => {
+      const next = updater(stateRef.current);
+      stateRef.current = next;
+      setState(updater);
+      return next;
+    },
+    []
+  );
+
   const updateUserPreferences = useCallback((prefs: Partial<UserPreferences>) => {
-    setState(prev => {
-      const updated = { ...prev, ...prefs };
-      syncSettingsToBackend({
-        name: updated.name,
-        email: updated.email,
-        loc: updated.loc,
-        fam: updated.fam,
-        life: updated.life,
-        sens: updated.sens,
-        theme: updated.theme,
-        nt: updated.nt,
-        priv: updated.priv,
-      });
-      return updated;
-    });
-  }, []);
+    const next = applyStateUpdate(prev => ({ ...prev, ...prefs }));
+    syncSettingsToBackend(extractSettingsPayload(next));
+  }, [applyStateUpdate]);
 
   const resetAllSettings = useCallback(() => {
-    setState(DEFAULT_STATE);
-    syncSettingsToBackend(DEFAULT_STATE);
+    applyStateUpdate(() => DEFAULT_STATE);
+    syncSettingsToBackend(extractSettingsPayload(DEFAULT_STATE));
     showToast('Reset settings to default');
-  }, [showToast]);
+  }, [applyStateUpdate, showToast]);
 
   const toggleTaskDone = useCallback((taskId: string, done: boolean) => {
-    setState(prev => ({
+    applyStateUpdate(prev => ({
       ...prev,
       done: {
         ...prev.done,
@@ -147,55 +163,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       },
     }));
     syncPlannerTaskToBackend(taskId, done);
-  }, []);
+  }, [applyStateUpdate]);
 
   const resetDayTasks = useCallback(() => {
-    setState(prev => ({
+    applyStateUpdate(prev => ({
       ...prev,
       done: {},
     }));
     resetPlannerBackend();
     showToast('Day reset');
-  }, [showToast]);
+  }, [applyStateUpdate, showToast]);
 
   const addChatMessage = useCallback((msg: ChatMessage) => {
-    setState(prev => ({
+    applyStateUpdate(prev => ({
       ...prev,
       chat: [...prev.chat, msg],
     }));
-  }, []);
+  }, [applyStateUpdate]);
 
   const clearChatHistory = useCallback(() => {
-    setState(prev => ({
+    applyStateUpdate(prev => ({
       ...prev,
       chat: [],
     }));
     showToast('Chat history cleared');
-  }, [showToast]);
+  }, [applyStateUpdate, showToast]);
 
   const toggleChallengeJoined = useCallback((challengeId: number) => {
-    setState(prev => {
-      const isJoined = !prev.joined[challengeId];
-      syncCommunityChallengeToBackend(challengeId, isJoined);
-      return {
-        ...prev,
-        joined: {
-          ...prev.joined,
-          [challengeId]: isJoined,
-        },
-      };
-    });
-  }, []);
+    const next = applyStateUpdate(prev => ({
+      ...prev,
+      joined: {
+        ...prev.joined,
+        [challengeId]: !prev.joined[challengeId],
+      },
+    }));
+    syncCommunityChallengeToBackend(challengeId, Boolean(next.joined[challengeId]));
+  }, [applyStateUpdate]);
 
   const toggleSidebarCollapse = useCallback(() => {
-    setState(prev => ({
+    applyStateUpdate(prev => ({
       ...prev,
       col: !prev.col,
     }));
-  }, []);
+  }, [applyStateUpdate]);
 
-  // Compute completed tasks and kg CO2e only when state.done changes
-  const { completedTasksCount, totalKgCo2eAvoided } = useMemo(() => {
+  // Compute completed tasks, progress, and kg CO2e only when state.done changes
+  const { completedTasksCount, totalKgCo2eAvoided, plannerProgressPercent } = useMemo(() => {
     let count = 0;
     let co2e = 0;
     for (const [id, isDone] of Object.entries(state.done)) {
@@ -204,7 +217,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         co2e += TASK_WEIGHTS[id] || 0;
       }
     }
-    return { completedTasksCount: count, totalKgCo2eAvoided: co2e };
+    const totalTasks = PLANNER_TASKS.length;
+    const pct = totalTasks > 0 ? Math.min(100, Math.round((count / totalTasks) * 100)) : 0;
+    return {
+      completedTasksCount: count,
+      totalKgCo2eAvoided: co2e,
+      plannerProgressPercent: pct,
+    };
   }, [state.done]);
 
   const contextValue = useMemo<AppContextType>(
@@ -229,6 +248,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast,
       completedTasksCount,
       totalKgCo2eAvoided,
+      plannerProgressPercent,
     }),
     [
       state,
@@ -248,6 +268,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast,
       completedTasksCount,
       totalKgCo2eAvoided,
+      plannerProgressPercent,
     ]
   );
 

@@ -128,11 +128,11 @@ export const IndoorPage: React.FC = () => {
 
       {/* 4 Visual Indoor Care Pillars */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {CARE_PILLARS.map((pillar, idx) => {
+        {CARE_PILLARS.map(pillar => {
           const Icon = pillar.icon;
           return (
             <div
-              key={idx}
+              key={pillar.title}
               className="rounded-2xl overflow-hidden bg-card border border-line shadow-subtle flex flex-col"
             >
               <PhotoFrame
@@ -175,8 +175,8 @@ export const IndoorPage: React.FC = () => {
           </div>
 
           <div className="divide-y divide-line/70">
-            {INDOOR_ADVICE[selectedRoom].map((tip, idx) => (
-              <div key={idx} className="chk items-center">
+            {INDOOR_ADVICE[selectedRoom].map(tip => (
+              <div key={`${selectedRoom}-${tip}`} className="chk items-center">
                 <Leaf size={16} className="text-forest flex-shrink-0" />
                 <span className="text-sm font-medium leading-relaxed">{tip}</span>
               </div>
@@ -192,8 +192,8 @@ export const IndoorPage: React.FC = () => {
               <h2 className="m-0">Air Purifier Best Practices</h2>
             </div>
             <div className="divide-y divide-line/70">
-              {PURIFIER_GUIDELINES.map((tip, idx) => (
-                <div key={idx} className="chk items-center">
+              {PURIFIER_GUIDELINES.map(tip => (
+                <div key={tip} className="chk items-center">
                   <ShieldCheck size={16} className="text-forest flex-shrink-0" />
                   <span className="text-sm font-medium leading-relaxed">{tip}</span>
                 </div>

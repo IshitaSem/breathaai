@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-
-type ThemeMode = 'auto' | 'light' | 'dark';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { ThemeMode } from '../types';
 
 interface ThemeContextType {
   theme: ThemeMode;
@@ -45,8 +44,10 @@ export const ThemeProvider: React.FC<{ initialTheme?: ThemeMode; children: React
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [theme]);
 
+  const value = useMemo(() => ({ theme, setTheme, isDark }), [theme, isDark]);
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, isDark }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

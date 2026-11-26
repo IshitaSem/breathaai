@@ -77,13 +77,13 @@ export const GreenerPage: React.FC = () => {
 
       {/* Photographic Choices Grid */}
       <div className="grid g3">
-        {filteredChoices.map((choice, idx) => {
+        {filteredChoices.map(choice => {
           const isAdded = Boolean(addedGoals[choice.title]);
           const photo = CHOICE_PHOTOS[choice.title] || PHOTOS.sunlitTrail;
 
           return (
             <div
-              key={idx}
+              key={choice.title}
               className="rounded-2xl overflow-hidden bg-card border border-line shadow-subtle hover:shadow-editorial transition-all flex flex-col justify-between"
             >
               <div>
