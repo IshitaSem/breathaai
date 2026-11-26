@@ -1,0 +1,44 @@
+
+# Environment variables and API secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+**/.venv/
+**/venv/
+**/env/
+.pytest_cache/
+.mypy_cache/
+*.db
+*.sqlite
+*.sqlite3
+
+# Node.js
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+npm-debug.log*
+yarn-debug.log*
+
+# Frontend build files
+frontend/.env.local
+frontend/.env.*.local
+
+# IDE and operating system
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.log
