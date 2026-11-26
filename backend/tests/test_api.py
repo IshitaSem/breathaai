@@ -249,3 +249,22 @@ def test_settings_invalid_theme_rejected():
 def test_community_invalid_challenge_rejected():
     res = client.post("/api/community/challenge/toggle", json={"challenge_id": 999, "is_joined": True})
     assert res.status_code == 404
+
+
+def test_chat_rate_limit_enforced(monkeypatch):
+    from app.api import chat_router
+
+    chat_router._rate_limit_buckets.clear()
+    monkeypatch.setattr(chat_router, "CHAT_RATE_LIMIT_MAX_REQUESTS", 2)
+
+    try:
+        headers = {"X-Forwarded-For": "203.0.113.42"}
+        r1 = client.post("/api/chat", json={"question": "AQI check 1"}, headers=headers)
+        r2 = client.post("/api/chat", json={"question": "AQI check 2"}, headers=headers)
+        r3 = client.post("/api/chat", json={"question": "AQI check 3"}, headers=headers)
+        assert r1.status_code == 200
+        assert r2.status_code == 200
+        assert r3.status_code == 429
+        assert "Retry-After" in r3.headers
+    finally:
+        chat_router._rate_limit_buckets.clear()
