@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { AirQualityData, ChatMessage, UserPreferences } from '../types';
 import { loadStoredState, saveStoredState, StoredAppState, DEFAULT_STATE } from '../services/storage';
+import { PLANNER_TASKS } from '../constants/mockData';
+import { useTheme } from './ThemeContext';
 import {
   fetchAirQualityData,
   getDemoAirQuality,
@@ -9,6 +11,10 @@ import {
   syncCommunityChallengeToBackend,
   syncSettingsToBackend,
 } from '../services/api';
+
+const TASK_WEIGHTS: Record<string, number> = Object.fromEntries(
+  PLANNER_TASKS.map(t => [t.id, t.co2eKg])
+);
 
 interface AppContextType {
   state: StoredAppState;
@@ -36,36 +42,70 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { setTheme } = useTheme();
   const [state, setState] = useState<StoredAppState>(() => loadStoredState());
   const [airData, setAirData] = useState<AirQualityData>(() => getDemoAirQuality(state.loc || 'Ludhiana'));
   const [loadingAir, setLoadingAir] = useState<boolean>(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+  const airRequestIdRef = useRef<number>(0);
+  const isInitialMountRef = useRef<boolean>(true);
 
-  // Sync state changes to localStorage
+  // Sync persisted theme preference on initial mount
   useEffect(() => {
+    if (state.theme) {
+      setTheme(state.theme);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sync state changes to localStorage (skip redundant write on initial mount)
+  useEffect(() => {
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
     saveStoredState(state);
   }, [state]);
 
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
+
   const showToast = useCallback((msg: string) => {
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+    }
     setToastMessage(msg);
-    const timer = setTimeout(() => {
+    toastTimerRef.current = window.setTimeout(() => {
       setToastMessage(null);
+      toastTimerRef.current = null;
     }, 2400);
-    return () => clearTimeout(timer);
   }, []);
 
   const refreshAirData = useCallback(async (cityOverride?: string) => {
     const targetCity = cityOverride || state.loc || 'Ludhiana';
+    const requestId = ++airRequestIdRef.current;
     setLoadingAir(true);
     try {
       const data = await fetchAirQualityData(targetCity);
-      setAirData(data);
+      if (requestId === airRequestIdRef.current) {
+        setAirData(data);
+      }
     } catch (err) {
       console.warn('Failed to fetch air data, falling back to benchmark', err);
-      setAirData(getDemoAirQuality(targetCity));
+      if (requestId === airRequestIdRef.current) {
+        setAirData(getDemoAirQuality(targetCity));
+      }
     } finally {
-      setLoadingAir(false);
+      if (requestId === airRequestIdRef.current) {
+        setLoadingAir(false);
+      }
     }
   }, [state.loc]);
 
@@ -154,49 +194,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   }, []);
 
-  // Compute completed tasks and kg CO2e
-  const completedTasksCount = Object.values(state.done).filter(Boolean).length;
-  const taskWeights: Record<string, number> = {
-    m1: 0,
-    m2: 0.1,
-    m3: 0.6,
-    m4: 1.8,
-    a1: 0,
-    a2: 0,
-    a3: 0.5,
-    e1: 0.4,
-    e2: 0.3,
-    e3: 0,
-  };
-  const totalKgCo2eAvoided = Object.entries(state.done)
-    .filter(([_, isDone]) => isDone)
-    .reduce((sum, [id]) => sum + (taskWeights[id] || 0), 0);
+  // Compute completed tasks and kg CO2e only when state.done changes
+  const { completedTasksCount, totalKgCo2eAvoided } = useMemo(() => {
+    let count = 0;
+    let co2e = 0;
+    for (const [id, isDone] of Object.entries(state.done)) {
+      if (isDone) {
+        count += 1;
+        co2e += TASK_WEIGHTS[id] || 0;
+      }
+    }
+    return { completedTasksCount: count, totalKgCo2eAvoided: co2e };
+  }, [state.done]);
+
+  const contextValue = useMemo<AppContextType>(
+    () => ({
+      state,
+      updateUserPreferences,
+      resetAllSettings,
+      airData,
+      loadingAir,
+      refreshAirData,
+      toggleTaskDone,
+      resetDayTasks,
+      chatMessages: state.chat,
+      addChatMessage,
+      clearChatHistory,
+      toggleChallengeJoined,
+      sidebarCollapsed: state.col,
+      toggleSidebarCollapse,
+      mobileSidebarOpen,
+      setMobileSidebarOpen,
+      toastMessage,
+      showToast,
+      completedTasksCount,
+      totalKgCo2eAvoided,
+    }),
+    [
+      state,
+      updateUserPreferences,
+      resetAllSettings,
+      airData,
+      loadingAir,
+      refreshAirData,
+      toggleTaskDone,
+      resetDayTasks,
+      addChatMessage,
+      clearChatHistory,
+      toggleChallengeJoined,
+      toggleSidebarCollapse,
+      mobileSidebarOpen,
+      toastMessage,
+      showToast,
+      completedTasksCount,
+      totalKgCo2eAvoided,
+    ]
+  );
 
   return (
-    <AppContext.Provider
-      value={{
-        state,
-        updateUserPreferences,
-        resetAllSettings,
-        airData,
-        loadingAir,
-        refreshAirData,
-        toggleTaskDone,
-        resetDayTasks,
-        chatMessages: state.chat,
-        addChatMessage,
-        clearChatHistory,
-        toggleChallengeJoined,
-        sidebarCollapsed: state.col,
-        toggleSidebarCollapse,
-        mobileSidebarOpen,
-        setMobileSidebarOpen,
-        toastMessage,
-        showToast,
-        completedTasksCount,
-        totalKgCo2eAvoided,
-      }}
-    >
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );

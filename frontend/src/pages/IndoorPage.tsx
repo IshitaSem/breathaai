@@ -4,51 +4,52 @@ import { INDOOR_ADVICE } from '../constants/mockData';
 import { PhotoFrame } from '../components/common/PhotoFrame';
 import { PHOTOS } from '../constants/photos';
 
+const ROOMS = Object.keys(INDOOR_ADVICE);
+
+const PURIFIER_GUIDELINES = [
+  'Choose a True HEPA (H13) filter rated for the room size (CADR ≥ 2/3 of room area).',
+  'Operate the purifier continuously with doors and windows firmly shut.',
+  'Place unit at least 1–2 feet away from walls and curtains for unrestricted 360° airflow.',
+  'Vacuum pre-filters monthly and replace main HEPA elements per manufacturer guidelines.',
+];
+
+const CARE_PILLARS = [
+  {
+    title: 'Smart Natural Ventilation',
+    badge: 'Ventilation',
+    icon: Wind,
+    photo: PHOTOS.cleanBedroom,
+    advice:
+      'Open windows for a brief 10–15 minute cross-breeze between 1 PM and 3 PM when ambient AQI dips, and seal them during morning and night inversions.',
+  },
+  {
+    title: 'Damp Cleaning Protocol',
+    badge: 'Dust Control',
+    icon: Droplets,
+    photo: PHOTOS.modernKitchen,
+    advice:
+      'Replace dry broom sweeping with damp mops and microfiber cloths so settled PM₁₀ and allergens are captured instead of re-suspended.',
+  },
+  {
+    title: 'Indoor Greenery & Botanicals',
+    badge: 'Plants',
+    icon: Leaf,
+    photo: PHOTOS.indoorPlantsShelf,
+    advice:
+      'Snake plants, peace lilies, and areca palms bring calm to living spaces. Pair them with mechanical HEPA filtration on high-pollution days.',
+  },
+  {
+    title: 'Zero Indoor Combustion',
+    badge: 'Source Control',
+    icon: Flame,
+    photo: PHOTOS.pottedFoliage,
+    advice:
+      'Always run kitchen exhaust fans while cooking and avoid incense, mosquito coils, or scented candles when outdoor AQI is elevated.',
+  },
+];
+
 export const IndoorPage: React.FC = () => {
   const [selectedRoom, setSelectedRoom] = useState<string>('Kitchen');
-  const rooms = Object.keys(INDOOR_ADVICE);
-
-  const purifierGuidelines = [
-    'Choose a True HEPA (H13) filter rated for the room size (CADR ≥ 2/3 of room area).',
-    'Operate the purifier continuously with doors and windows firmly shut.',
-    'Place unit at least 1–2 feet away from walls and curtains for unrestricted 360° airflow.',
-    'Vacuum pre-filters monthly and replace main HEPA elements per manufacturer guidelines.',
-  ];
-
-  const carePillars = [
-    {
-      title: 'Smart Natural Ventilation',
-      badge: 'Ventilation',
-      icon: Wind,
-      photo: PHOTOS.cleanBedroom,
-      advice:
-        'Open windows for a brief 10–15 minute cross-breeze between 1 PM and 3 PM when ambient AQI dips, and seal them during morning and night inversions.',
-    },
-    {
-      title: 'Damp Cleaning Protocol',
-      badge: 'Dust Control',
-      icon: Droplets,
-      photo: PHOTOS.modernKitchen,
-      advice:
-        'Replace dry broom sweeping with damp mops and microfiber cloths so settled PM₁₀ and allergens are captured instead of re-suspended.',
-    },
-    {
-      title: 'Indoor Greenery & Botanicals',
-      badge: 'Plants',
-      icon: Leaf,
-      photo: PHOTOS.indoorPlantsShelf,
-      advice:
-        'Snake plants, peace lilies, and areca palms bring calm to living spaces. Pair them with mechanical HEPA filtration on high-pollution days.',
-    },
-    {
-      title: 'Zero Indoor Combustion',
-      badge: 'Source Control',
-      icon: Flame,
-      photo: PHOTOS.pottedFoliage,
-      advice:
-        'Always run kitchen exhaust fans while cooking and avoid incense, mosquito coils, or scented candles when outdoor AQI is elevated.',
-    },
-  ];
 
   return (
     <div className="space-y-7">
@@ -127,7 +128,7 @@ export const IndoorPage: React.FC = () => {
 
       {/* 4 Visual Indoor Care Pillars */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {carePillars.map((pillar, idx) => {
+        {CARE_PILLARS.map((pillar, idx) => {
           const Icon = pillar.icon;
           return (
             <div
@@ -160,7 +161,7 @@ export const IndoorPage: React.FC = () => {
           <div className="row justify-between items-center mb-3">
             <h2 className="m-0">Room-wise Interventions</h2>
             <div className="tabs">
-              {rooms.map(room => (
+              {ROOMS.map(room => (
                 <button
                   key={room}
                   type="button"
@@ -191,7 +192,7 @@ export const IndoorPage: React.FC = () => {
               <h2 className="m-0">Air Purifier Best Practices</h2>
             </div>
             <div className="divide-y divide-line/70">
-              {purifierGuidelines.map((tip, idx) => (
+              {PURIFIER_GUIDELINES.map((tip, idx) => (
                 <div key={idx} className="chk items-center">
                   <ShieldCheck size={16} className="text-forest flex-shrink-0" />
                   <span className="text-sm font-medium leading-relaxed">{tip}</span>

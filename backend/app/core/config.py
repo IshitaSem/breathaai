@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DATABASE_URL: str = "sqlite:///./breathewise.db"
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+    CORS_ORIGIN_REGEX: str = r"^https://[a-zA-Z0-9-]+\.vercel\.app$"
 
     model_config = SettingsConfigDict(
         env_file=".env",

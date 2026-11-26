@@ -12,6 +12,23 @@ const CHALLENGE_PHOTOS: Record<number, CuratedPhoto> = {
   2: PHOTOS.urbanPark,
 };
 
+const WEEKLY_DATA = [
+  { label: 'Mon', value: 18 },
+  { label: 'Tue', value: 24 },
+  { label: 'Wed', value: 31 },
+  { label: 'Thu', value: 27 },
+  { label: 'Fri', value: 35 },
+  { label: 'Sat', value: 42 },
+  { label: 'Sun', value: 38 },
+];
+
+const MONTHLY_DATA = [
+  { label: 'Wk 1', value: 96 },
+  { label: 'Wk 2', value: 118 },
+  { label: 'Wk 3', value: 140 },
+  { label: 'Wk 4', value: 171 },
+];
+
 export const CommunityPage: React.FC = () => {
   const {
     state,
@@ -22,24 +39,7 @@ export const CommunityPage: React.FC = () => {
 
   const [timeframe, setTimeframe] = useState<'Weekly' | 'Monthly'>('Weekly');
 
-  const weeklyData = [
-    { label: 'Mon', value: 18 },
-    { label: 'Tue', value: 24 },
-    { label: 'Wed', value: 31 },
-    { label: 'Thu', value: 27 },
-    { label: 'Fri', value: 35 },
-    { label: 'Sat', value: 42 },
-    { label: 'Sun', value: 38 },
-  ];
-
-  const monthlyData = [
-    { label: 'Wk 1', value: 96 },
-    { label: 'Wk 2', value: 118 },
-    { label: 'Wk 3', value: 140 },
-    { label: 'Wk 4', value: 171 },
-  ];
-
-  const activeChartData = timeframe === 'Weekly' ? weeklyData : monthlyData;
+  const activeChartData = timeframe === 'Weekly' ? WEEKLY_DATA : MONTHLY_DATA;
   const totalBaseAvoided = activeChartData.reduce((acc, curr) => acc + curr.value, 0);
   const totalCommunityKg = Math.round(totalBaseAvoided + totalKgCo2eAvoided);
   const totalUserWeeklyActions = completedTasksCount + 21;

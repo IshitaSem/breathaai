@@ -15,7 +15,7 @@ interface ComparisonChartProps {
   unit?: string;
 }
 
-export const ComparisonChart: React.FC<ComparisonChartProps> = ({
+export const ComparisonChart: React.FC<ComparisonChartProps> = React.memo(({
   data,
   color = 'var(--g)',
   unit = 'AQI',
@@ -71,4 +71,4 @@ export const ComparisonChart: React.FC<ComparisonChartProps> = ({
       </ResponsiveContainer>
     </div>
   );
-};
+});

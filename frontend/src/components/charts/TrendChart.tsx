@@ -15,7 +15,7 @@ interface TrendChartProps {
   unit?: string;
 }
 
-export const TrendChart: React.FC<TrendChartProps> = ({
+export const TrendChart: React.FC<TrendChartProps> = React.memo(({
   data,
   color = 'var(--g)',
   unit = 'AQI',
@@ -83,4 +83,4 @@ export const TrendChart: React.FC<TrendChartProps> = ({
       </ResponsiveContainer>
     </div>
   );
-};
+});

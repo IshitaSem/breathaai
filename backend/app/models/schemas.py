@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Dict
+from typing import Dict, List, Literal, Optional, Tuple
 from pydantic import BaseModel, Field
 
 
@@ -13,12 +13,12 @@ class AQICategorySchema(BaseModel):
 
 
 class PollutantsSchema(BaseModel):
-    pm25: float
-    pm10: float
-    no2: float
-    so2: float
-    co: float
-    o3: float
+    pm25: Optional[float] = None
+    pm10: Optional[float] = None
+    no2: Optional[float] = None
+    so2: Optional[float] = None
+    co: Optional[float] = None
+    o3: Optional[float] = None
     nh3: Optional[float] = None  # Missing from Open-Meteo, represented as None, never 0.0
     pb: Optional[float] = None   # Missing from Open-Meteo, represented as None, never 0.0
     pm25_24h_avg: Optional[float] = None
@@ -68,9 +68,10 @@ class AirQualityResponse(BaseModel):
     source: str
     modelProvider: str = "Copernicus Atmosphere Monitoring Service (CAMS) Global / Open-Meteo"
     modelResolution: str = "~0.4° (~40 km) Spatial / 1-hour Temporal"
-    averagingMethod: str = "Rolling 24-hr average for PM2.5/PM10/NO2/SO2; Rolling 8-hr average for CO/O3"
+    averagingMethod: str = "Trailing 24-hr rolling mean (PM2.5/PM10/NO2/SO2) & 8-hr rolling mean (CO/O3) on modelled data (not strict CPCB daily station equivalence)"
     dataClassification: str = "Modelled Atmospheric Telemetry (Not Ground CAAQMS Stations)"
     cpcbSufficient: bool = True
+    averagingCoverageComplete: Optional[bool] = None
     coordinates: Optional[Dict[str, float]] = None
 
 
@@ -109,9 +110,9 @@ class PlannerTaskItemSchema(BaseModel):
 
 
 class PlannerToggleRequest(BaseModel):
-    task_id: str
+    task_id: str = Field(..., min_length=1, max_length=50)
     completed: bool
-    date_str: Optional[str] = None
+    date_str: Optional[str] = Field(default=None, max_length=10)
 
 
 class PlannerSummaryResponse(BaseModel):
@@ -160,12 +161,12 @@ class PrivacyPrefs(BaseModel):
 
 
 class UserSettingsSchema(BaseModel):
-    name: str = "Ishita"
-    email: Optional[str] = ""
-    loc: str = "Ludhiana"
+    name: str = Field(default="Ishita", min_length=1, max_length=100)
+    email: Optional[str] = Field(default="", max_length=150)
+    loc: str = Field(default="Ludhiana", min_length=1, max_length=100)
     fam: int = Field(default=4, ge=1, le=20)
-    life: str = "Mixed commute"
-    sens: str = "Children / elderly at home"
-    theme: str = "auto"
+    life: str = Field(default="Mixed commute", max_length=100)
+    sens: str = Field(default="Children / elderly at home", max_length=150)
+    theme: Literal["auto", "light", "dark"] = "auto"
     nt: NotificationPrefs = NotificationPrefs()
     priv: PrivacyPrefs = PrivacyPrefs()

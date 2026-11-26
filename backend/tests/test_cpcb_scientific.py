@@ -219,3 +219,170 @@ def test_gemini_fallback_on_invalid_key(monkeypatch):
     assert data["is_live_genai"] is False
     assert data["model_used"] == "Contextual Fallback Engine"
     assert len(data["cards"]) >= 2
+
+
+# ---------------- 8. MOCKED UPSTREAM OPEN-METEO ACCURACY & CACHE TESTS ---------------- #
+
+def _make_mock_openmeteo_payload(
+    *,
+    curr_time="2026-11-26T12:00",
+    pm25_curr=0.0,
+    pm10_curr=None,
+    co_curr=0.0,
+    no2_curr=None,
+    so2_curr=None,
+    o3_curr=None,
+    hours_total=192,
+    pm25_series=None,
+    pm10_series=None,
+):
+    from datetime import datetime, timedelta
+    start = datetime(2026, 11, 25, 0, 0)
+    times = [(start + timedelta(hours=i)).strftime("%Y-%m-%dT%H:00") for i in range(hours_total)]
+    pm25_vals = pm25_series if pm25_series is not None else [30.0] * hours_total
+    pm10_vals = pm10_series if pm10_series is not None else [120.0] * hours_total
+    return {
+        "current": {
+            "time": curr_time,
+            "pm2_5": pm25_curr,
+            "pm10": pm10_curr,
+            "carbon_monoxide": co_curr,
+            "nitrogen_dioxide": no2_curr,
+            "sulphur_dioxide": so2_curr,
+            "ozone": o3_curr,
+            "us_aqi": 0,
+        },
+        "hourly": {
+            "time": times,
+            "pm2_5": pm25_vals,
+            "pm10": pm10_vals,
+            "carbon_monoxide": [500.0] * hours_total,
+            "nitrogen_dioxide": [40.0] * hours_total,
+            "sulphur_dioxide": [10.0] * hours_total,
+            "ozone": [30.0] * hours_total,
+        },
+    }
+
+
+def test_mocked_zero_and_none_pollutants_and_min_coverage(monkeypatch):
+    import asyncio
+    from app.services import aqi_service
+
+    aqi_service._aqi_cache.clear()
+    payload = _make_mock_openmeteo_payload(
+        pm25_curr=0.0,
+        pm10_curr=None,
+        co_curr=0.0,
+        no2_curr=None,
+        so2_curr=None,
+        o3_curr=None,
+        pm25_series=[0.0] * 192,
+        pm10_series=[None] * 192,
+    )
+    # Only 2 pollutants non-null in hourly (pm2_5=0.0, co=0.5, no2/so2/o3=40/10/30) -> let's null out gases in hourly too
+    payload["hourly"]["nitrogen_dioxide"] = [None] * 192
+    payload["hourly"]["sulphur_dioxide"] = [None] * 192
+    payload["hourly"]["ozone"] = [None] * 192
+    payload["hourly"]["carbon_monoxide"] = [None] * 192
+
+    captured_urls = []
+
+    class MockResp:
+        status_code = 200
+        def json(self):
+            return payload
+
+    class MockClient:
+        async def get(self, url):
+            captured_urls.append(url)
+            return MockResp()
+
+    monkeypatch.setattr(aqi_service, "get_http_client", lambda: MockClient())
+    res = asyncio.run(aqi_service.get_air_quality("Delhi"))
+
+    assert "timezone=Asia%2FKolkata" in captured_urls[0]
+    assert res.measurementTime == "2026-11-26 12:00 IST"
+    assert res.lastUpdated.endswith("IST")
+    # Zero values preserved, None values not fabricated
+    assert res.pollutants.pm25 == 0.0
+    assert res.pollutants.co == 0.0
+    assert res.pollutants.pm10 is None
+    assert res.pollutants.no2 is None
+    assert res.usAqi == 0
+    # Only PM2.5 + CO (2 pollutants < 3) -> cpcbSufficient is False
+    assert res.cpcbSufficient is False
+    # Zero PM2.5 hourly should yield AQI 0, not 50
+    assert res.hourly[0].aqi == 0
+
+
+def test_mocked_pm10_hourly_averaging_and_7day_forecast(monkeypatch):
+    import asyncio
+    from app.services import aqi_service
+
+    aqi_service._aqi_cache.clear()
+    # Day 0 (past): index 0..23; Day 1 (today 2026-11-26): index 24..47; Days 2..7: index 48..191
+    pm25_series = [30.0] * 48 + [90.0] * 144  # Future days jump to 90 -> sub-index 200
+    pm10_series = [250.0] * 192  # PM10=250 -> sub-index 200 (would be 45 if 1.5*30 was fabricated!)
+
+    payload = _make_mock_openmeteo_payload(
+        curr_time="2026-11-26T12:15",  # Mismatched minute -> should match 2026-11-26T12:00 (idx 36), NOT 191
+        pm25_curr=30.0,
+        pm10_curr=250.0,
+        co_curr=1000.0,
+        no2_curr=40.0,
+        so2_curr=10.0,
+        o3_curr=30.0,
+        pm25_series=pm25_series,
+        pm10_series=pm10_series,
+    )
+
+    class MockResp:
+        status_code = 200
+        def json(self):
+            return payload
+
+    class MockClient:
+        async def get(self, url):
+            return MockResp()
+
+    monkeypatch.setattr(aqi_service, "get_http_client", lambda: MockClient())
+    res = asyncio.run(aqi_service.get_air_quality("Mumbai"))
+
+    # Hourly must use actual pm10=250 (sub-index 200), not 1.5 * 30 = 45
+    assert res.hourly[0].pm10 == 250.0
+    assert res.hourly[0].aqi == 200
+    assert res.averagingCoverageComplete is True
+    assert len(res.daily) == 7
+    assert res.daily[0].day == "Thu"  # 2026-11-26 is Thursday
+
+
+def test_mocked_missing_timestamp_does_not_jump_to_future():
+    from app.services.aqi_service import _find_current_hour_index
+    times = [f"2026-11-26T{h:02d}:00" for h in range(24)] + [f"2026-12-02T{h:02d}:00" for h in range(24)]
+    idx = _find_current_hour_index(times, "2099-01-01T00:00")
+    assert idx == 24  # Never len(times) - 1 (47)
+
+
+def test_aqi_cache_hit_expiry_and_max_size(monkeypatch):
+    from app.services import aqi_service
+
+    aqi_service._aqi_cache.clear()
+    monkeypatch.setattr(aqi_service, "AQI_CACHE_MAX_SIZE", 2)
+    monkeypatch.setattr(aqi_service, "AQI_CACHE_TTL_SECONDS", 10.0)
+
+    now = [100.0]
+    monkeypatch.setattr(aqi_service.time, "monotonic", lambda: now[0])
+
+    sample = aqi_service.build_demo_air_quality("Delhi")
+    aqi_service._set_cached_aqi(("A", 1.0, 1.0), sample)
+    aqi_service._set_cached_aqi(("B", 2.0, 2.0), sample)
+    assert aqi_service._get_cached_aqi(("A", 1.0, 1.0)) is not None  # Moves A to MRU
+
+    # Adding C evicts LRU (B), keeps A
+    aqi_service._set_cached_aqi(("C", 3.0, 3.0), sample)
+    assert ("B", 2.0, 2.0) not in aqi_service._aqi_cache
+    assert ("A", 1.0, 1.0) in aqi_service._aqi_cache
+
+    # Advance past TTL -> expired entry is evicted on get
+    now[0] = 115.0
+    assert aqi_service._get_cached_aqi(("A", 1.0, 1.0)) is None

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Info, ShieldAlert, Activity } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AQICard } from '../components/common/AQICard';
@@ -14,20 +14,24 @@ export const MonitorPage: React.FC = () => {
   const { airData } = useApp();
   const [trendTab, setTrendTab] = useState<'Hourly' | 'Daily' | 'Compare'>('Hourly');
 
-  const hourlyData = airData.hourly.map(h => ({
-    label: h.hour,
-    value: h.aqi,
-  }));
+  const hourlyData = useMemo(
+    () => airData.hourly.map(h => ({ label: h.hour, value: h.aqi })),
+    [airData.hourly]
+  );
 
-  const dailyData = airData.daily.map(d => ({
-    label: d.day,
-    value: d.aqi,
-  }));
+  const dailyData = useMemo(
+    () => airData.daily.map(d => ({ label: d.day, value: d.aqi })),
+    [airData.daily]
+  );
 
-  const compareData = Object.entries(DEMO_LOCS).map(([city, vals]) => ({
-    label: city,
-    value: city === airData.loc ? airData.aqi : vals.aqi,
-  }));
+  const compareData = useMemo(
+    () =>
+      Object.entries(DEMO_LOCS).map(([city, vals]) => ({
+        label: city,
+        value: city === airData.loc ? airData.aqi : vals.aqi,
+      })),
+    [airData.loc, airData.aqi]
+  );
 
   return (
     <div className="space-y-7">
@@ -94,7 +98,7 @@ export const MonitorPage: React.FC = () => {
             <div>
               <TrendChart data={dailyData} color="var(--sky)" unit="AQI" />
               <div className="sub text-xs mt-2">
-                7-day synoptic forecast model based on meteorological wind vectors.
+                7-day modelled forecast aggregated from CAMS Global hourly projections (not ground observations).
               </div>
             </div>
           )}
@@ -103,7 +107,7 @@ export const MonitorPage: React.FC = () => {
             <div>
               <ComparisonChart data={compareData} color="var(--g)" unit="AQI" />
               <div className="sub text-xs mt-2">
-                Comparative urban baseline across major monitored metro regions.
+                Live/cached NAQI for {airData.loc} compared against static benchmark baselines for other cities.
               </div>
             </div>
           )}

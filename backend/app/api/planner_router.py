@@ -1,6 +1,6 @@
 from datetime import date
-from typing import List
-from fastapi import APIRouter, Depends
+from typing import Dict, List, Optional
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..core.database import get_db
 from ..models.db_models import PlannerTaskDB
@@ -24,11 +24,23 @@ DEFAULT_TASKS = [
     {"id": "e2", "timeOfDay": "Evening", "description": "Switch off standby devices and unused lights", "co2eKg": 0.3},
     {"id": "e3", "timeOfDay": "Evening", "description": "Run the purifier in the bedroom 30 min before sleep", "co2eKg": 0.0},
 ]
+TASK_BY_ID: Dict[str, dict] = {t["id"]: t for t in DEFAULT_TASKS}
+
+
+def _resolve_iso_date(date_str: Optional[str]) -> str:
+    if not date_str:
+        return date.today().isoformat()
+    if len(date_str) != 10:
+        raise HTTPException(status_code=422, detail="Invalid date format; expected YYYY-MM-DD")
+    try:
+        return date.fromisoformat(date_str).isoformat()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid calendar date; expected YYYY-MM-DD") from exc
 
 
 @router.get("/tasks", response_model=PlannerSummaryResponse)
-def get_daily_tasks(date_str: str = None, db: Session = Depends(get_db)):
-    target_date = date_str or date.today().isoformat()
+def get_daily_tasks(date_str: Optional[str] = None, db: Session = Depends(get_db)):
+    target_date = _resolve_iso_date(date_str)
     db_items = db.query(PlannerTaskDB).filter(PlannerTaskDB.date_str == target_date).all()
     completed_map = {item.task_id: item.completed for item in db_items}
 
@@ -62,9 +74,9 @@ def get_daily_tasks(date_str: str = None, db: Session = Depends(get_db)):
 
 @router.post("/toggle", response_model=PlannerSummaryResponse)
 def toggle_task(req: PlannerToggleRequest, db: Session = Depends(get_db)):
-    target_date = req.date_str or date.today().isoformat()
+    target_date = _resolve_iso_date(req.date_str)
 
-    task_match = next((t for t in DEFAULT_TASKS if t["id"] == req.task_id), None)
+    task_match = TASK_BY_ID.get(req.task_id)
     co2e_val = task_match["co2eKg"] if task_match else 0.0
 
     record = (
@@ -89,8 +101,8 @@ def toggle_task(req: PlannerToggleRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/reset", response_model=PlannerSummaryResponse)
-def reset_daily_tasks(date_str: str = None, db: Session = Depends(get_db)):
-    target_date = date_str or date.today().isoformat()
+def reset_daily_tasks(date_str: Optional[str] = None, db: Session = Depends(get_db)):
+    target_date = _resolve_iso_date(date_str)
     db.query(PlannerTaskDB).filter(PlannerTaskDB.date_str == target_date).delete()
     db.commit()
     return get_daily_tasks(target_date, db)

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bot,
@@ -17,6 +17,7 @@ import { PollutantGrid } from '../components/common/PollutantGrid';
 import { TrendChart } from '../components/charts/TrendChart';
 import { PhotoFrame } from '../components/common/PhotoFrame';
 import { PHOTOS } from '../constants/photos';
+import { PLANNER_TASKS } from '../constants/mockData';
 
 export const OverviewPage: React.FC = () => {
   const {
@@ -42,10 +43,10 @@ export const OverviewPage: React.FC = () => {
     year: 'numeric',
   });
 
-  const chartData = airData.hourly.map(h => ({
-    label: h.hour,
-    value: h.aqi,
-  }));
+  const chartData = useMemo(
+    () => airData.hourly.map(h => ({ label: h.hour, value: h.aqi })),
+    [airData.hourly]
+  );
 
   const recommendations = [
     {
@@ -107,7 +108,7 @@ export const OverviewPage: React.FC = () => {
     },
   ];
 
-  const totalTasks = 10;
+  const totalTasks = PLANNER_TASKS.length;
   const progressPercent = Math.min(100, Math.round((completedTasksCount / totalTasks) * 100));
 
   return (

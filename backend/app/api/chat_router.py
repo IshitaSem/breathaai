@@ -1,4 +1,5 @@
 import json
+import logging
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from ..core.database import get_db
@@ -6,6 +7,7 @@ from ..models.schemas import ChatRequest, ChatResponse
 from ..models.db_models import ChatLogDB
 from ..services.ai_service import generate_ai_response
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["AI Assistant"])
 
 
@@ -35,7 +37,7 @@ async def chat_with_assistant(
         db.add(log_entry)
         db.commit()
     except Exception as err:
-        print(f"[Chat Router] Error persisting chat log: {err}")
+        logger.warning("Error persisting chat log: %s", err)
         db.rollback()
 
     return response

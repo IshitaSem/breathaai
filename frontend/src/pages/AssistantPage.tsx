@@ -6,6 +6,15 @@ import { ChatMessage } from '../types';
 import { PhotoFrame } from '../components/common/PhotoFrame';
 import { PHOTOS } from '../constants/photos';
 
+const SUGGESTED_PROMPTS = [
+  { label: 'Is it safe to go outside today?', icon: Sun, tag: 'Outdoor' },
+  { label: 'How can I protect my family from winter smog?', icon: Shield, tag: 'Family' },
+  { label: 'When should I exercise outdoors?', icon: HeartPulse, tag: 'Fitness' },
+  { label: 'How can I improve my indoor air quality?', icon: Home, tag: 'Indoor' },
+  { label: 'What should I do when PM2.5 is high?', icon: Wind, tag: 'PM2.5' },
+  { label: 'How can I reduce my pollution contribution?', icon: Leaf, tag: 'Action' },
+];
+
 export const AssistantPage: React.FC = () => {
   const {
     state,
@@ -50,8 +59,8 @@ export const AssistantPage: React.FC = () => {
       const res = await askAIAssistant(q, {
         loc: airData.loc,
         aqi: airData.aqi,
-        pm25: airData.pollutants.pm25,
-        pm10: airData.pollutants.pm10,
+        pm25: airData.pollutants.pm25 ?? 0,
+        pm10: airData.pollutants.pm10 ?? 0,
         fam: state.fam,
         sens: state.sens,
         life: state.life,
@@ -78,15 +87,6 @@ export const AssistantPage: React.FC = () => {
       setLoading(false);
     }
   };
-
-  const suggestedPrompts = [
-    { label: 'Is it safe to go outside today?', icon: Sun, tag: 'Outdoor' },
-    { label: 'How can I protect my family from winter smog?', icon: Shield, tag: 'Family' },
-    { label: 'When should I exercise outdoors?', icon: HeartPulse, tag: 'Fitness' },
-    { label: 'How can I improve my indoor air quality?', icon: Home, tag: 'Indoor' },
-    { label: 'What should I do when PM2.5 is high?', icon: Wind, tag: 'PM2.5' },
-    { label: 'How can I reduce my pollution contribution?', icon: Leaf, tag: 'Action' },
-  ];
 
   return (
     <div className="space-y-6">
@@ -180,7 +180,7 @@ export const AssistantPage: React.FC = () => {
             Suggested Questions
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-            {suggestedPrompts.map((item, idx) => {
+            {SUGGESTED_PROMPTS.map((item, idx) => {
               const Icon = item.icon;
               return (
                 <button

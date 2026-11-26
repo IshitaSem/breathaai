@@ -3,7 +3,12 @@ from datetime import date
 from fastapi.testclient import TestClient
 from app.main import app
 from app.core.database import init_db, SessionLocal
-from app.services.aqi_service import calculate_cpcb_naqi, get_aqi_category
+from app.services.aqi_service import (
+    SUPPORTED_CITIES,
+    build_demo_air_quality,
+    calculate_cpcb_naqi,
+    get_aqi_category,
+)
 from app.models.db_models import UserSettingsDB, PlannerTaskDB, CommunityChallengeDB
 
 init_db()
@@ -190,3 +195,57 @@ def test_community_persistence_across_sessions():
         assert rec.is_joined is True
     finally:
         db.close()
+
+
+# ---------------- 7. PHASE 1 REGRESSION: FALLBACK & CORS ---------------- #
+
+def test_demo_fallback_all_supported_cities():
+    for city, coords in SUPPORTED_CITIES.items():
+        resp = build_demo_air_quality(city)
+        assert resp.loc == city
+        assert resp.isLive is False
+        assert resp.aqi > 0
+        assert resp.coordinates == {"latitude": coords["lat"], "longitude": coords["lon"]}
+
+
+def test_cors_allows_local_and_vercel_rejects_arbitrary_origin():
+    res_local = client.get("/api/health", headers={"Origin": "http://localhost:5173"})
+    assert res_local.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    assert res_local.headers.get("access-control-allow-credentials") == "true"
+
+    res_vercel = client.get("/api/health", headers={"Origin": "https://breathaai.vercel.app"})
+    assert res_vercel.headers.get("access-control-allow-origin") == "https://breathaai.vercel.app"
+
+    res_evil = client.get("/api/health", headers={"Origin": "https://evil.example.com"})
+    assert res_evil.headers.get("access-control-allow-origin") is None
+
+
+# ---------------- 8. PHASE 3 REGRESSION: INPUT VALIDATION ---------------- #
+
+def test_air_quality_invalid_coordinates_rejected():
+    res_lat = client.get("/api/air-quality?city=Custom&lat=999&lon=77.2")
+    assert res_lat.status_code == 422
+
+    res_lon = client.get("/api/air-quality?city=Custom&lat=28.6&lon=-200")
+    assert res_lon.status_code == 422
+
+
+def test_planner_invalid_date_rejected():
+    res_get = client.get("/api/planner/tasks?date_str=not-a-date")
+    assert res_get.status_code == 422
+
+    res_post = client.post("/api/planner/toggle", json={"task_id": "m1", "completed": True, "date_str": "2026-99-99"})
+    assert res_post.status_code == 422
+
+
+def test_settings_invalid_theme_rejected():
+    res = client.post(
+        "/api/settings",
+        json={"name": "Ishita", "loc": "Delhi", "fam": 4, "life": "Mixed commute", "sens": "None", "theme": "neon"},
+    )
+    assert res.status_code == 422
+
+
+def test_community_invalid_challenge_rejected():
+    res = client.post("/api/community/challenge/toggle", json={"challenge_id": 999, "is_joined": True})
+    assert res.status_code == 404

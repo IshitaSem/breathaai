@@ -1,9 +1,39 @@
-import os
+import asyncio
 import json
+import logging
+import os
 import re
-from typing import Optional, List, Tuple
+from typing import Dict, List, Optional, Tuple
+from google import genai
+from google.genai import types
 from ..core.config import settings
 from ..models.schemas import ChatContextSchema, ChatResponse
+
+logger = logging.getLogger(__name__)
+
+GEMINI_TIMEOUT_SECONDS = 15.0
+
+SYSTEM_INSTRUCTION = (
+    "You are BreatheWise AI, an expert urban air quality, environmental health, and climate action advisor. "
+    "You provide practical, empathetic, and evidence-grounded guidance for citizens dealing with urban air pollution. "
+    "Always factor in the user's specific context: city, current Indian NAQI, PM2.5/PM10 concentrations, household size, commute pattern, and health sensitivities. "
+    "Give practical, cautious advice (e.g. N95/FFP2 masks, avoiding exercise during peak smog, midday 10-min airing, True HEPA purifiers, damp mopping, kitchen exhaust). "
+    "CRITICAL: Do not make medical diagnoses or clinical prescriptions; advise consulting licensed medical professionals for specific medical concerns. "
+    "Your output MUST be strictly valid JSON without conversational prefixes outside the JSON, formatted as: "
+    "{\"text\": \"2 to 4 concise conversational sentences answering the query directly with context\", "
+    "\"cards\": [[\"Short Imperative Title\", \"Scientific or environmental rationale explaining why\"]]}"
+)
+
+_client_cache: Dict[str, genai.Client] = {}
+
+
+def _get_gemini_client(api_key: str) -> genai.Client:
+    """Return a cached Gemini client instance for the given API key."""
+    client = _client_cache.get(api_key)
+    if client is None:
+        client = genai.Client(api_key=api_key)
+        _client_cache[api_key] = client
+    return client
 
 
 def get_gemini_api_key() -> str:
@@ -126,23 +156,9 @@ async def generate_ai_response(question: str, context: Optional[ChatContextSchem
     if not api_key:
         return run_contextual_fallback(question, ctx)
 
-    # Gemini API Live Execution using official google-genai SDK
+    # Gemini API Live Execution using official google-genai async SDK
     try:
-        from google import genai
-        from google.genai import types
-
-        client = genai.Client(api_key=api_key)
-
-        system_instruction = (
-            "You are BreatheWise AI, an expert urban air quality, environmental health, and climate action advisor. "
-            "You provide practical, empathetic, and evidence-grounded guidance for citizens dealing with urban air pollution. "
-            "Always factor in the user's specific context: city, current Indian NAQI, PM2.5/PM10 concentrations, household size, commute pattern, and health sensitivities. "
-            "Give practical, cautious advice (e.g. N95/FFP2 masks, avoiding exercise during peak smog, midday 10-min airing, True HEPA purifiers, damp mopping, kitchen exhaust). "
-            "CRITICAL: Do not make medical diagnoses or clinical prescriptions; advise consulting licensed medical professionals for specific medical concerns. "
-            "Your output MUST be strictly valid JSON without conversational prefixes outside the JSON, formatted as: "
-            "{\"text\": \"2 to 4 concise conversational sentences answering the query directly with context\", "
-            "\"cards\": [[\"Short Imperative Title\", \"Scientific or environmental rationale explaining why\"]]}"
-        )
+        client = _get_gemini_client(api_key)
 
         user_prompt = (
             f"Context for {ctx.loc}:\n"
@@ -157,18 +173,21 @@ async def generate_ai_response(question: str, context: Optional[ChatContextSchem
         )
 
         target_model = settings.GEMINI_MODEL or "gemini-2.5-flash"
-        response = client.models.generate_content(
-            model=target_model,
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                response_mime_type="application/json",
-                temperature=0.25,
-                max_output_tokens=650,
+        response = await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model=target_model,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    response_mime_type="application/json",
+                    temperature=0.25,
+                    max_output_tokens=650,
+                ),
             ),
+            timeout=GEMINI_TIMEOUT_SECONDS,
         )
 
-        cleaned_text = clean_json_markdown(response.text)
+        cleaned_text = clean_json_markdown(response.text or "")
         data = json.loads(cleaned_text)
 
         text_content = data.get("text", "")
@@ -188,6 +207,6 @@ async def generate_ai_response(question: str, context: Optional[ChatContextSchem
                 model_used=f"{target_model} (Live GenAI)",
             )
     except Exception as exc:
-        print(f"[AI Service] Gemini API call handled exception: {exc}. Reverting to contextual fallback.")
+        logger.warning("Gemini API call handled exception: %s. Reverting to contextual fallback.", exc)
 
     return run_contextual_fallback(question, ctx)

@@ -68,11 +68,9 @@ export function loadStoredState(): StoredAppState {
   }
 }
 
-export function saveStoredState(state: Partial<StoredAppState>): void {
+export function saveStoredState(state: StoredAppState): void {
   try {
-    const current = loadStoredState();
-    const updated = { ...current, ...state };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (err) {
     console.warn('Error saving to localStorage', err);
   }

@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
 from .core.database import init_db
+from .services.aqi_service import close_http_client
 from .api import (
     aqi_router,
     chat_router,
@@ -11,14 +13,21 @@ from .api import (
     settings_router,
 )
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize SQLite database tables on startup
     init_db()
-    print("[Startup] BreatheWise AI SQLite Database initialized.")
+    logger.info("BreatheWise AI SQLite Database initialized.")
     yield
-    print("[Shutdown] BreatheWise AI backend shutting down.")
+    await close_http_client()
+    logger.info("BreatheWise AI backend shutting down.")
 
 
 app = FastAPI(
@@ -28,13 +37,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS Middleware
+# CORS Middleware (explicit local + Vercel origins, never wildcard '*' with credentials)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origin_list + ["*"],
+    allow_origins=settings.cors_origin_list,
+    allow_origin_regex=settings.CORS_ORIGIN_REGEX or None,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Register API Routers under /api

@@ -46,12 +46,12 @@ export interface AirQualityData {
   indexStandard: string;
   category: AQICategory;
   pollutants: {
-    pm25: number;
-    pm10: number;
-    no2: number;
-    so2: number;
-    co: number;
-    o3: number;
+    pm25: number | null;
+    pm10: number | null;
+    no2: number | null;
+    so2: number | null;
+    co: number | null;
+    o3: number | null;
     nh3?: number | null;
     pb?: number | null;
     pm25_24h_avg?: number | null;
@@ -73,6 +73,7 @@ export interface AirQualityData {
   modelResolution?: string;
   averagingMethod?: string;
   cpcbSufficient?: boolean;
+  averagingCoverageComplete?: boolean | null;
   coordinates?: { latitude: number; longitude: number };
 }
 

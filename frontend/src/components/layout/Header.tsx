@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, Bell, Settings, MapPin, Search } from 'lucide-react';
-import { SUPPORTED_CITIES } from '../../constants/mockData';
+import { SUPPORTED_CITIES, PLANNER_TASKS } from '../../constants/mockData';
 import { NAV_ITEMS } from '../../constants/navigation';
 import { useApp } from '../../context/AppContext';
 
@@ -48,7 +48,7 @@ export const Header: React.FC = () => {
     }
   };
 
-  const remainingTasks = 10 - completedTasksCount;
+  const remainingTasks = PLANNER_TASKS.length - completedTasksCount;
   const userInitial = (state.name?.trim().charAt(0) || 'U').toUpperCase();
 
   return (
