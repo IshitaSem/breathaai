@@ -30,11 +30,11 @@ export const PhotoFrame: React.FC<PhotoFrameProps> = ({
           alt={photo.alt}
           loading="lazy"
           onError={() => setFailed(true)}
-          className={`w-full h-full object-cover transition-transform duration-500 ${imgClassName}`}
+          className={`absolute inset-0 w-full h-full object-cover transition-transform duration-500 ${imgClassName}`}
         />
       ) : (
         <div
-          className="w-full h-full flex items-center justify-center opacity-30"
+          className="absolute inset-0 w-full h-full flex items-center justify-center opacity-30"
           aria-label={photo.alt}
         >
           <Leaf size={36} className="text-white" />

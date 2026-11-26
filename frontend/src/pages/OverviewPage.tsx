@@ -115,10 +115,10 @@ export const OverviewPage: React.FC = () => {
       {/* Editorial Nature Hero Banner */}
       <PhotoFrame
         photo={PHOTOS.heroCanopy}
-        className="rounded-3xl min-h-[280px] md:min-h-[320px] shadow-editorial border border-line/60"
+        className="rounded-3xl min-h-[220px] md:min-h-[250px] shadow-editorial border border-line/60"
         overlayClassName="bg-gradient-to-r from-[#173F35]/90 via-[#173F35]/70 to-[#173F35]/35"
       >
-        <div className="relative z-10 p-6 md:p-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 h-full min-h-[280px] md:min-h-[320px]">
+        <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 h-full min-h-[220px] md:min-h-[250px]">
           <div className="max-w-xl text-[#F8F7F2] space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-medium text-[#E5EFE7] border border-white/15">
               <MapPin size={12} />
