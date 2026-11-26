@@ -258,6 +258,43 @@ def calculate_cpcb_naqi(
 
 # ---------------- DEMO & TELEMETRY BUILDERS ---------------- #
 
+DEMO_STATION_SPECS: Tuple[Tuple[str, float, float, float], ...] = (
+    ("Central Urban Grid Point (Modelled)", 1.0, 0.4, 0.4),
+    ("Industrial Belt Grid Point (Modelled)", 1.15, 0.75, 0.3),
+    ("Northern Residential Grid (Modelled)", 0.88, 0.3, 0.7),
+    ("Arterial Transit Grid (Modelled)", 1.2, 0.8, 0.75),
+    ("Suburban Outskirts Grid (Modelled)", 0.8, 0.2, 0.25),
+)
+
+LIVE_STATION_TEMPLATES: Tuple[Tuple[str, float, float, float], ...] = (
+    ("{city} Central Zone (Dispersion Model)", 1.0, 0.42, 0.38),
+    ("{city} Industrial Hub (Dispersion Model)", 1.16, 0.76, 0.28),
+    ("{city} Sector Green (Dispersion Model)", 0.86, 0.32, 0.68),
+    ("{city} Ring Road Transit (Dispersion Model)", 1.22, 0.82, 0.72),
+    ("{city} University Enclave (Dispersion Model)", 0.78, 0.18, 0.22),
+)
+
+
+def _opt_float(value: Any) -> Optional[float]:
+    return float(value) if value is not None else None
+
+
+def _opt_round(value: Optional[float], ndigits: int = 1) -> Optional[float]:
+    return round(float(value), ndigits) if value is not None else None
+
+
+def _particulate_aqi(
+    pm25: Optional[float],
+    pm10: Optional[float],
+    fallback_aqi: int,
+) -> int:
+    """Compute the higher CPCB particulate sub-index (PM2.5/PM10) or fall back cleanly."""
+    sub_25 = calculate_sub_index(pm25, "pm25")
+    sub_10 = calculate_sub_index(pm10, "pm10")
+    valid_subs = [s for s in (sub_25, sub_10) if s is not None]
+    return max(valid_subs) if valid_subs else fallback_aqi
+
+
 def _build_daily_forecast(base_aqi: int, multipliers: Tuple[float, ...]) -> List[DailyForecastSchema]:
     return [
         DailyForecastSchema(
@@ -314,6 +351,35 @@ def _find_current_hour_index(times: List[str], curr_time: Optional[str]) -> int:
     return min(24, len(times) - 1)
 
 
+def _build_hourly_series(
+    times: List[str],
+    pm25_arr: List[Optional[float]],
+    pm10_arr: List[Optional[float]],
+    start_idx: int,
+    fallback_aqi: int,
+) -> List[HourlyReadingSchema]:
+    """Build 24-hour modelled forecast readings starting at the matched current hour."""
+    end_idx = start_idx + 24
+    hourly_times = times[start_idx:end_idx]
+    hourly_pm25s = pm25_arr[start_idx:end_idx]
+    hourly_pm10s = pm10_arr[start_idx:end_idx]
+
+    readings: List[HourlyReadingSchema] = []
+    for idx, t_str in enumerate(hourly_times):
+        hour_label = t_str.split("T")[-1][:5] if "T" in t_str else f"{idx:02d}:00"
+        p25_val = hourly_pm25s[idx] if idx < len(hourly_pm25s) else None
+        p10_val = hourly_pm10s[idx] if idx < len(hourly_pm10s) else None
+        readings.append(
+            HourlyReadingSchema(
+                hour=hour_label,
+                aqi=_particulate_aqi(p25_val, p10_val, fallback_aqi),
+                pm25=_opt_round(p25_val),
+                pm10=_opt_round(p10_val),
+            )
+        )
+    return readings
+
+
 def _aggregate_daily_forecast(
     times: List[str],
     pm25_arr: List[Optional[float]],
@@ -345,10 +411,7 @@ def _aggregate_daily_forecast(
             day_label = date_str
         mean_p25 = (sum(p25_vals) / len(p25_vals)) if p25_vals else None
         mean_p10 = (sum(p10_vals) / len(p10_vals)) if p10_vals else None
-        sub_25 = calculate_sub_index(mean_p25, "pm25")
-        sub_10 = calculate_sub_index(mean_p10, "pm10")
-        valid_subs = [s for s in (sub_25, sub_10) if s is not None]
-        d_aqi = max(valid_subs) if valid_subs else fallback_aqi
+        d_aqi = _particulate_aqi(mean_p25, mean_p10, fallback_aqi)
         daily_list.append(
             DailyForecastSchema(day=day_label, aqi=d_aqi, category=get_aqi_category(d_aqi).name)
         )
@@ -356,6 +419,7 @@ def _aggregate_daily_forecast(
 
 
 def build_demo_air_quality(city: str) -> AirQualityResponse:
+    """Build deterministic offline benchmark telemetry for the requested city."""
     base = DEMO_BASELINES.get(city, DEMO_BASELINES["Ludhiana"])
     aqi, dominant, sufficient, _ = calculate_cpcb_naqi(
         pm25=base["pm25"],
@@ -379,15 +443,7 @@ def build_demo_air_quality(city: str) -> AirQualityResponse:
     ]
 
     daily = _build_daily_forecast(aqi, (0.82, 0.95, 1.1, 1.04, 0.9, 1.0, 1.0))
-
-    stn_offsets = (
-        ("Central Urban Grid Point (Modelled)", 1.0, 0.4, 0.4),
-        ("Industrial Belt Grid Point (Modelled)", 1.15, 0.75, 0.3),
-        ("Northern Residential Grid (Modelled)", 0.88, 0.3, 0.7),
-        ("Arterial Transit Grid (Modelled)", 1.2, 0.8, 0.75),
-        ("Suburban Outskirts Grid (Modelled)", 0.8, 0.2, 0.25),
-    )
-    stations = _build_stations(aqi, stn_offsets)
+    stations = _build_stations(aqi, DEMO_STATION_SPECS)
 
     city_info = SUPPORTED_CITIES.get(city)
     coords = {"latitude": city_info["lat"], "longitude": city_info["lon"]} if city_info else None
@@ -431,8 +487,122 @@ def build_demo_air_quality(city: str) -> AirQualityResponse:
     )
 
 
+def _parse_openmeteo_response(
+    city: str,
+    target_lat: float,
+    target_lon: float,
+    data: Dict[str, Any],
+) -> AirQualityResponse:
+    """Transform an Open-Meteo JSON payload into a validated AirQualityResponse."""
+    current = data.get("current", {})
+    hourly = data.get("hourly", {})
+
+    curr_time = current.get("time")
+    times = hourly.get("time", [])
+    pm25_series = hourly.get("pm2_5", [])
+    pm10_series = hourly.get("pm10", [])
+    curr_idx = _find_current_hour_index(times, curr_time)
+
+    # Compute 24-hour averages for PM2.5, PM10, NO2, SO2 with coverage tracking
+    pm25_24h, pm25_cov = _calc_rolling_mean(pm25_series, curr_idx, 24)
+    pm10_24h, pm10_cov = _calc_rolling_mean(pm10_series, curr_idx, 24)
+    no2_24h, no2_cov = _calc_rolling_mean(hourly.get("nitrogen_dioxide", []), curr_idx, 24)
+    so2_24h, so2_cov = _calc_rolling_mean(hourly.get("sulphur_dioxide", []), curr_idx, 24)
+
+    # Compute 8-hour averages for CO (convert µg/m³ to mg/m³) and Ozone (µg/m³)
+    co_8h_raw, co_cov = _calc_rolling_mean(hourly.get("carbon_monoxide", []), curr_idx, 8)
+    co_8h = (co_8h_raw / 1000.0) if co_8h_raw is not None else None
+    o3_8h, o3_cov = _calc_rolling_mean(hourly.get("ozone", []), curr_idx, 8)
+
+    coverage_complete = any((pm25_cov, pm10_cov)) and sum(
+        1 for c in (pm25_cov, pm10_cov, no2_cov, so2_cov, co_cov, o3_cov) if c
+    ) >= 3
+
+    # Instantaneous snapshot values (preserve None when missing, never treat 0.0 as falsy)
+    inst_pm25 = _opt_float(current.get("pm2_5"))
+    inst_pm10 = _opt_float(current.get("pm10"))
+    inst_no2 = _opt_float(current.get("nitrogen_dioxide"))
+    inst_so2 = _opt_float(current.get("sulphur_dioxide"))
+    co_raw = _opt_float(current.get("carbon_monoxide"))
+    inst_co = _opt_round(co_raw / 1000.0, 2) if co_raw is not None else None
+    inst_o3 = _opt_float(current.get("ozone"))
+    us_aqi = int(current["us_aqi"]) if current.get("us_aqi") is not None else None
+
+    # Use rolling averages for CPCB NAQI calculation if available, falling back to instantaneous
+    eval_pm25 = pm25_24h if pm25_24h is not None else inst_pm25
+    eval_pm10 = pm10_24h if pm10_24h is not None else inst_pm10
+    eval_no2 = no2_24h if no2_24h is not None else inst_no2
+    eval_so2 = so2_24h if so2_24h is not None else inst_so2
+    eval_co = co_8h if co_8h is not None else inst_co
+    eval_o3 = o3_8h if o3_8h is not None else inst_o3
+
+    # Compute Indian National AQI with all 8 pollutants (NH3 and Pb are None)
+    indian_aqi, dominant_pollutant, cpcb_sufficient, _ = calculate_cpcb_naqi(
+        pm25=eval_pm25,
+        pm10=eval_pm10,
+        no2=eval_no2,
+        so2=eval_so2,
+        co=eval_co,
+        o3=eval_o3,
+        nh3=None,  # Not provided by Open-Meteo, strictly None
+        pb=None,   # Not provided by Open-Meteo, strictly None
+    )
+    category = get_aqi_category(indian_aqi)
+
+    raw_time = curr_time or ""
+    measurement_time = (
+        f"{raw_time.replace('T', ' ')} IST"
+        if raw_time
+        else datetime.now(IST_TZ).strftime("%Y-%m-%d %H:%M IST")
+    )
+
+    forecast_start_idx = curr_idx if curr_idx >= 0 else 0
+    hourly_list = _build_hourly_series(times, pm25_series, pm10_series, forecast_start_idx, indian_aqi)
+    daily_list = _aggregate_daily_forecast(times, pm25_series, pm10_series, forecast_start_idx, indian_aqi)
+
+    stn_specs = tuple(
+        (template.format(city=city), mult, x, y)
+        for template, mult, x, y in LIVE_STATION_TEMPLATES
+    )
+    stations_list = _build_stations(indian_aqi, stn_specs)
+
+    return AirQualityResponse(
+        loc=city,
+        aqi=indian_aqi,
+        usAqi=us_aqi,
+        category=category,
+        dominantPollutant=dominant_pollutant,
+        pollutants=PollutantsSchema(
+            pm25=_opt_round(inst_pm25),
+            pm10=_opt_round(inst_pm10),
+            no2=_opt_round(inst_no2),
+            so2=_opt_round(inst_so2),
+            co=inst_co,
+            o3=_opt_round(inst_o3),
+            nh3=None,  # Missing from Open-Meteo
+            pb=None,   # Missing from Open-Meteo
+            pm25_24h_avg=_opt_round(pm25_24h),
+            pm10_24h_avg=_opt_round(pm10_24h),
+            no2_24h_avg=_opt_round(no2_24h),
+            so2_24h_avg=_opt_round(so2_24h),
+            co_8h_avg=_opt_round(co_8h, 2),
+            o3_8h_avg=_opt_round(o3_8h),
+        ),
+        hourly=hourly_list,
+        daily=daily_list,
+        stations=stations_list,
+        lastUpdated=datetime.now(IST_TZ).strftime("%I:%M %p IST"),
+        measurementTime=measurement_time,
+        isLive=True,
+        source="Open-Meteo CAMS Global IFS-AER (~0.4° Model)",
+        cpcbSufficient=cpcb_sufficient,
+        averagingCoverageComplete=coverage_complete,
+        coordinates={"latitude": target_lat, "longitude": target_lon},
+    )
+
+
 async def get_air_quality(city: str, lat: Optional[float] = None, lon: Optional[float] = None) -> AirQualityResponse:
-    # Resolve coordinates
+    """Fetch live Open-Meteo CAMS telemetry with caching and offline benchmark fallback."""
     if city in SUPPORTED_CITIES:
         target_lat = SUPPORTED_CITIES[city]["lat"]
         target_lon = SUPPORTED_CITIES[city]["lon"]
@@ -461,152 +631,13 @@ async def get_air_quality(city: str, lat: Optional[float] = None, lon: Optional[
         client = get_http_client()
         resp = await client.get(url)
         if resp.status_code == 200:
-            data = resp.json()
-            current = data.get("current", {})
-            hourly = data.get("hourly", {})
-
-            # Find current index in hourly array to compute rolling averages
-            curr_time = current.get("time")
-            times = hourly.get("time", [])
-            curr_idx = _find_current_hour_index(times, curr_time)
-
-            # Compute 24-hour averages for PM2.5, PM10, NO2, SO2 with coverage tracking
-            pm25_24h, pm25_cov = _calc_rolling_mean(hourly.get("pm2_5", []), curr_idx, 24)
-            pm10_24h, pm10_cov = _calc_rolling_mean(hourly.get("pm10", []), curr_idx, 24)
-            no2_24h, no2_cov = _calc_rolling_mean(hourly.get("nitrogen_dioxide", []), curr_idx, 24)
-            so2_24h, so2_cov = _calc_rolling_mean(hourly.get("sulphur_dioxide", []), curr_idx, 24)
-
-            # Compute 8-hour averages for CO (convert µg/m³ to mg/m³) and Ozone (µg/m³)
-            co_8h_raw, co_cov = _calc_rolling_mean(hourly.get("carbon_monoxide", []), curr_idx, 8)
-            co_8h = (co_8h_raw / 1000.0) if co_8h_raw is not None else None
-            o3_8h, o3_cov = _calc_rolling_mean(hourly.get("ozone", []), curr_idx, 8)
-
-            coverage_complete = any((pm25_cov, pm10_cov)) and sum(
-                1 for c in (pm25_cov, pm10_cov, no2_cov, so2_cov, co_cov, o3_cov) if c
-            ) >= 3
-
-            # Instantaneous snapshot values (preserve None when missing, never treat 0.0 as falsy)
-            inst_pm25 = float(current["pm2_5"]) if current.get("pm2_5") is not None else None
-            inst_pm10 = float(current["pm10"]) if current.get("pm10") is not None else None
-            inst_no2 = float(current["nitrogen_dioxide"]) if current.get("nitrogen_dioxide") is not None else None
-            inst_so2 = float(current["sulphur_dioxide"]) if current.get("sulphur_dioxide") is not None else None
-            co_raw = float(current["carbon_monoxide"]) if current.get("carbon_monoxide") is not None else None
-            inst_co = round(co_raw / 1000.0, 2) if co_raw is not None else None
-            inst_o3 = float(current["ozone"]) if current.get("ozone") is not None else None
-            us_aqi = int(current["us_aqi"]) if current.get("us_aqi") is not None else None
-
-            # Use rolling averages for CPCB NAQI calculation if available, falling back to instantaneous
-            eval_pm25 = pm25_24h if pm25_24h is not None else inst_pm25
-            eval_pm10 = pm10_24h if pm10_24h is not None else inst_pm10
-            eval_no2 = no2_24h if no2_24h is not None else inst_no2
-            eval_so2 = so2_24h if so2_24h is not None else inst_so2
-            eval_co = co_8h if co_8h is not None else inst_co
-            eval_o3 = o3_8h if o3_8h is not None else inst_o3
-
-            # Compute Indian National AQI with all 8 pollutants (NH3 and Pb are None)
-            indian_aqi, dominant_pollutant, cpcb_sufficient, _ = calculate_cpcb_naqi(
-                pm25=eval_pm25,
-                pm10=eval_pm10,
-                no2=eval_no2,
-                so2=eval_so2,
-                co=eval_co,
-                o3=eval_o3,
-                nh3=None,  # Not provided by Open-Meteo, strictly None
-                pb=None,   # Not provided by Open-Meteo, strictly None
-            )
-            category = get_aqi_category(indian_aqi)
-
-            # Format measurement timestamp in IST
-            raw_time = current.get("time", "")
-            measurement_time = (
-                f"{raw_time.replace('T', ' ')} IST"
-                if raw_time
-                else datetime.now(IST_TZ).strftime("%Y-%m-%d %H:%M IST")
-            )
-
-            # Hourly series: next 24 hours of modelled forecast using actual hourly pm2_5 & pm10
-            hourly_list: List[HourlyReadingSchema] = []
-            forecast_start_idx = curr_idx if curr_idx >= 0 else 0
-            hourly_times = times[forecast_start_idx : forecast_start_idx + 24]
-            hourly_pm25s = hourly.get("pm2_5", [])[forecast_start_idx : forecast_start_idx + 24]
-            hourly_pm10s = hourly.get("pm10", [])[forecast_start_idx : forecast_start_idx + 24]
-
-            for idx, t_str in enumerate(hourly_times):
-                hour_label = t_str.split("T")[-1][:5] if "T" in t_str else f"{idx:02d}:00"
-                p25_val = hourly_pm25s[idx] if idx < len(hourly_pm25s) else None
-                p10_val = hourly_pm10s[idx] if idx < len(hourly_pm10s) else None
-                sub_pm25 = calculate_sub_index(p25_val, "pm25")
-                sub_pm10 = calculate_sub_index(p10_val, "pm10")
-                valid_subs = [s for s in (sub_pm25, sub_pm10) if s is not None]
-                h_aqi = max(valid_subs) if valid_subs else indian_aqi
-                hourly_list.append(
-                    HourlyReadingSchema(
-                        hour=hour_label,
-                        aqi=h_aqi,
-                        pm25=round(p25_val, 1) if p25_val is not None else None,
-                        pm10=round(p10_val, 1) if p10_val is not None else None,
-                    )
-                )
-
-            daily_list = _aggregate_daily_forecast(
-                times,
-                hourly.get("pm2_5", []),
-                hourly.get("pm10", []),
-                forecast_start_idx,
-                indian_aqi,
-            )
-
-            # Modelled dispersion variation around the urban center (strictly identified as dispersion model)
-            stn_offsets = (
-                (f"{city} Central Zone (Dispersion Model)", 1.0, 0.42, 0.38),
-                (f"{city} Industrial Hub (Dispersion Model)", 1.16, 0.76, 0.28),
-                (f"{city} Sector Green (Dispersion Model)", 0.86, 0.32, 0.68),
-                (f"{city} Ring Road Transit (Dispersion Model)", 1.22, 0.82, 0.72),
-                (f"{city} University Enclave (Dispersion Model)", 0.78, 0.18, 0.22),
-            )
-            stations_list = _build_stations(indian_aqi, stn_offsets)
-
-            result = AirQualityResponse(
-                loc=city,
-                aqi=indian_aqi,
-                usAqi=us_aqi,
-                indexStandard="Indicative CPCB-Method Estimate (Modelled Data)",
-                category=category,
-                dominantPollutant=dominant_pollutant,
-                pollutants=PollutantsSchema(
-                    pm25=round(inst_pm25, 1) if inst_pm25 is not None else None,
-                    pm10=round(inst_pm10, 1) if inst_pm10 is not None else None,
-                    no2=round(inst_no2, 1) if inst_no2 is not None else None,
-                    so2=round(inst_so2, 1) if inst_so2 is not None else None,
-                    co=inst_co,
-                    o3=round(inst_o3, 1) if inst_o3 is not None else None,
-                    nh3=None,  # Missing from Open-Meteo
-                    pb=None,   # Missing from Open-Meteo
-                    pm25_24h_avg=round(pm25_24h, 1) if pm25_24h is not None else None,
-                    pm10_24h_avg=round(pm10_24h, 1) if pm10_24h is not None else None,
-                    no2_24h_avg=round(no2_24h, 1) if no2_24h is not None else None,
-                    so2_24h_avg=round(so2_24h, 1) if so2_24h is not None else None,
-                    co_8h_avg=round(co_8h, 2) if co_8h is not None else None,
-                    o3_8h_avg=round(o3_8h, 1) if o3_8h is not None else None,
-                ),
-                hourly=hourly_list,
-                daily=daily_list,
-                stations=stations_list,
-                lastUpdated=datetime.now(IST_TZ).strftime("%I:%M %p IST"),
-                measurementTime=measurement_time,
-                isLive=True,
-                source="Open-Meteo CAMS Global IFS-AER (~0.4° Model)",
-                modelProvider="Copernicus Atmosphere Monitoring Service (CAMS) Global / Open-Meteo",
-                modelResolution="~0.4° (~40 km) Spatial / 1-hour Temporal",
-                averagingMethod="Trailing 24-hr rolling mean (PM2.5/PM10/NO2/SO2) & 8-hr rolling mean (CO/O3) on modelled data (not strict CPCB daily station equivalence)",
-                dataClassification="Modelled Atmospheric Telemetry (Not Ground CAAQMS Stations)",
-                cpcbSufficient=cpcb_sufficient,
-                averagingCoverageComplete=coverage_complete,
-                coordinates={"latitude": target_lat, "longitude": target_lon},
-            )
+            result = _parse_openmeteo_response(city, target_lat, target_lon, resp.json())
             _set_cached_aqi(cache_key, result)
             return result
-    except Exception as e:
-        logger.warning("Live AQI query failed for %s: %s. Falling back to benchmark.", city, e)
+        logger.warning("Open-Meteo returned HTTP %s for %s. Falling back to benchmark.", resp.status_code, city)
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        logger.warning("Live AQI query failed for %s: %s. Falling back to benchmark.", city, exc)
+    except Exception as exc:
+        logger.exception("Unexpected error during live AQI query for %s: %s. Falling back to benchmark.", city, exc)
 
     return build_demo_air_quality(city)

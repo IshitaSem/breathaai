@@ -20,6 +20,7 @@ _rate_limit_buckets: "OrderedDict[str, Deque[float]]" = OrderedDict()
 
 
 def _get_client_ip(request: Request) -> str:
+    """Extract client IP, preferring the first X-Forwarded-For hop when proxied."""
     forwarded_for = request.headers.get("x-forwarded-for")
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
@@ -27,6 +28,7 @@ def _get_client_ip(request: Request) -> str:
 
 
 def _enforce_chat_rate_limit(request: Request) -> None:
+    """Apply an in-memory sliding-window rate limit per client IP."""
     client_ip = _get_client_ip(request)
     now = time.monotonic()
     cutoff = now - CHAT_RATE_LIMIT_WINDOW_SECONDS
@@ -59,7 +61,7 @@ async def chat_with_assistant(
     req: ChatRequest,
     request: Request,
     db: Session = Depends(get_db),
-):
+) -> ChatResponse:
     """
     Provides context-aware conversational environmental guidance.
     Integrates Google Gemini 2.5 Flash GenAI when an API key is configured,

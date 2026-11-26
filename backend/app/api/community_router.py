@@ -1,46 +1,56 @@
-from typing import Dict, List
+from typing import List, TypedDict
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from ..core.database import get_db
+from ..core.database import commit_session, get_db
 from ..models.db_models import CommunityChallengeDB, PlannerTaskDB
 from ..models.schemas import (
-    CommunityStatsResponse,
     CommunityChallengeItemSchema,
     CommunityChallengeToggleRequest,
+    CommunityStatsResponse,
+    HistoryPointSchema,
 )
 
 router = APIRouter(prefix="/community", tags=["Community"])
 
-BASE_CHALLENGES = [
+
+class ChallengeSpec(TypedDict):
+    id: int
+    title: str
+    description: str
+    participants: int
+
+
+BASE_CHALLENGES: List[ChallengeSpec] = [
     {"id": 0, "title": "No-burn week", "description": "Avoid burning waste or leaves for 7 days", "participants": 412},
     {"id": 1, "title": "Car-free Friday", "description": "Use public transport or walk every Friday", "participants": 287},
     {"id": 2, "title": "Switch off standby", "description": "Unplug idle devices nightly", "participants": 356},
 ]
 VALID_CHALLENGE_IDS = {c["id"] for c in BASE_CHALLENGES}
 
-WEEKLY_HISTORY: List[Dict[str, object]] = [
-    {"label": "Mon", "value": 18},
-    {"label": "Tue", "value": 24},
-    {"label": "Wed", "value": 31},
-    {"label": "Thu", "value": 27},
-    {"label": "Fri", "value": 35},
-    {"label": "Sat", "value": 42},
-    {"label": "Sun", "value": 38},
+WEEKLY_HISTORY: List[HistoryPointSchema] = [
+    HistoryPointSchema(label="Mon", value=18),
+    HistoryPointSchema(label="Tue", value=24),
+    HistoryPointSchema(label="Wed", value=31),
+    HistoryPointSchema(label="Thu", value=27),
+    HistoryPointSchema(label="Fri", value=35),
+    HistoryPointSchema(label="Sat", value=42),
+    HistoryPointSchema(label="Sun", value=38),
 ]
 
-MONTHLY_HISTORY: List[Dict[str, object]] = [
-    {"label": "Wk 1", "value": 96},
-    {"label": "Wk 2", "value": 118},
-    {"label": "Wk 3", "value": 140},
-    {"label": "Wk 4", "value": 171},
+MONTHLY_HISTORY: List[HistoryPointSchema] = [
+    HistoryPointSchema(label="Wk 1", value=96),
+    HistoryPointSchema(label="Wk 2", value=118),
+    HistoryPointSchema(label="Wk 3", value=140),
+    HistoryPointSchema(label="Wk 4", value=171),
 ]
 
-BASE_AVOIDED_KG = sum(int(item["value"]) for item in WEEKLY_HISTORY)  # 215 kg
+BASE_AVOIDED_KG = sum(item.value for item in WEEKLY_HISTORY)  # 215 kg
 
 
 @router.get("/stats", response_model=CommunityStatsResponse)
-def get_community_stats(db: Session = Depends(get_db)):
+def get_community_stats(db: Session = Depends(get_db)) -> CommunityStatsResponse:
+    """Return aggregate community impact benchmarks and challenge membership status."""
     # Aggregate user's completed actions directly in SQL without hydrating ORM rows
     user_done_count, user_co2e_sum = (
         db.query(
@@ -79,7 +89,11 @@ def get_community_stats(db: Session = Depends(get_db)):
 
 
 @router.post("/challenge/toggle", response_model=CommunityStatsResponse)
-def toggle_community_challenge(req: CommunityChallengeToggleRequest, db: Session = Depends(get_db)):
+def toggle_community_challenge(
+    req: CommunityChallengeToggleRequest,
+    db: Session = Depends(get_db),
+) -> CommunityStatsResponse:
+    """Persist challenge join/leave membership and return updated community statistics."""
     if req.challenge_id not in VALID_CHALLENGE_IDS:
         raise HTTPException(status_code=404, detail="Challenge not found")
 
@@ -89,5 +103,5 @@ def toggle_community_challenge(req: CommunityChallengeToggleRequest, db: Session
     else:
         rec = CommunityChallengeDB(challenge_id=req.challenge_id, is_joined=req.is_joined)
         db.add(rec)
-    db.commit()
+    commit_session(db, "update challenge membership")
     return get_community_stats(db)

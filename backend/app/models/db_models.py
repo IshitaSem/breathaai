@@ -3,7 +3,8 @@ from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, Text
 from ..core.database import Base
 
 
-def utcnow():
+def utcnow() -> datetime:
+    """Return the current UTC timestamp with timezone information."""
     return datetime.now(timezone.utc)
 
 

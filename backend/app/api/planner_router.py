@@ -1,8 +1,8 @@
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TypedDict
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from ..core.database import get_db
+from ..core.database import commit_session, get_db
 from ..models.db_models import PlannerTaskDB
 from ..models.schemas import (
     PlannerTaskItemSchema,
@@ -12,7 +12,15 @@ from ..models.schemas import (
 
 router = APIRouter(prefix="/planner", tags=["Planner"])
 
-DEFAULT_TASKS = [
+
+class PlannerTaskSpec(TypedDict):
+    id: str
+    timeOfDay: str
+    description: str
+    co2eKg: float
+
+
+DEFAULT_TASKS: List[PlannerTaskSpec] = [
     {"id": "m1", "timeOfDay": "Morning", "description": "Check today’s AQI before leaving; plan outdoor time after 11 am", "co2eKg": 0.0},
     {"id": "m2", "timeOfDay": "Morning", "description": "Keep windows shut during early-morning smog peak", "co2eKg": 0.1},
     {"id": "m3", "timeOfDay": "Morning", "description": "Cook with the chimney/exhaust fan on and use induction or LPG over wood/coal", "co2eKg": 0.6},
@@ -24,10 +32,11 @@ DEFAULT_TASKS = [
     {"id": "e2", "timeOfDay": "Evening", "description": "Switch off standby devices and unused lights", "co2eKg": 0.3},
     {"id": "e3", "timeOfDay": "Evening", "description": "Run the purifier in the bedroom 30 min before sleep", "co2eKg": 0.0},
 ]
-TASK_BY_ID: Dict[str, dict] = {t["id"]: t for t in DEFAULT_TASKS}
+TASK_BY_ID: Dict[str, PlannerTaskSpec] = {t["id"]: t for t in DEFAULT_TASKS}
 
 
 def _resolve_iso_date(date_str: Optional[str]) -> str:
+    """Validate an optional YYYY-MM-DD string, defaulting to today's ISO date."""
     if not date_str:
         return date.today().isoformat()
     if len(date_str) != 10:
@@ -39,7 +48,11 @@ def _resolve_iso_date(date_str: Optional[str]) -> str:
 
 
 @router.get("/tasks", response_model=PlannerSummaryResponse)
-def get_daily_tasks(date_str: Optional[str] = None, db: Session = Depends(get_db)):
+def get_daily_tasks(
+    date_str: Optional[str] = None,
+    db: Session = Depends(get_db),
+) -> PlannerSummaryResponse:
+    """Return all daily planner tasks and completion progress for the requested date."""
     target_date = _resolve_iso_date(date_str)
     db_items = db.query(PlannerTaskDB).filter(PlannerTaskDB.date_str == target_date).all()
     completed_map = {item.task_id: item.completed for item in db_items}
@@ -73,7 +86,11 @@ def get_daily_tasks(date_str: Optional[str] = None, db: Session = Depends(get_db
 
 
 @router.post("/toggle", response_model=PlannerSummaryResponse)
-def toggle_task(req: PlannerToggleRequest, db: Session = Depends(get_db)):
+def toggle_task(
+    req: PlannerToggleRequest,
+    db: Session = Depends(get_db),
+) -> PlannerSummaryResponse:
+    """Toggle completion state of a planner task for the target calendar date."""
     target_date = _resolve_iso_date(req.date_str)
 
     task_match = TASK_BY_ID.get(req.task_id)
@@ -96,13 +113,17 @@ def toggle_task(req: PlannerToggleRequest, db: Session = Depends(get_db)):
         )
         db.add(record)
 
-    db.commit()
+    commit_session(db, "save planner task")
     return get_daily_tasks(target_date, db)
 
 
 @router.post("/reset", response_model=PlannerSummaryResponse)
-def reset_daily_tasks(date_str: Optional[str] = None, db: Session = Depends(get_db)):
+def reset_daily_tasks(
+    date_str: Optional[str] = None,
+    db: Session = Depends(get_db),
+) -> PlannerSummaryResponse:
+    """Clear all completed planner task records for the target calendar date."""
     target_date = _resolve_iso_date(date_str)
     db.query(PlannerTaskDB).filter(PlannerTaskDB.date_str == target_date).delete()
-    db.commit()
+    commit_session(db, "reset planner tasks")
     return get_daily_tasks(target_date, db)

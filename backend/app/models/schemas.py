@@ -94,7 +94,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     text: str
-    cards: List[Tuple[str, str]] = []
+    cards: List[Tuple[str, str]] = Field(default_factory=list)
     is_live_genai: bool = False
     model_used: str = "Contextual Fallback Engine"
 
@@ -133,12 +133,17 @@ class CommunityChallengeItemSchema(BaseModel):
     is_joined: bool = False
 
 
+class HistoryPointSchema(BaseModel):
+    label: str
+    value: int
+
+
 class CommunityStatsResponse(BaseModel):
     user_actions_this_week: int
     community_participants: int
     total_co2e_avoided_kg: float
-    weekly_history: List[Dict[str, object]]
-    monthly_history: List[Dict[str, object]]
+    weekly_history: List[HistoryPointSchema]
+    monthly_history: List[HistoryPointSchema]
     challenges: List[CommunityChallengeItemSchema]
 
 
@@ -168,5 +173,5 @@ class UserSettingsSchema(BaseModel):
     life: str = Field(default="Mixed commute", max_length=100)
     sens: str = Field(default="Children / elderly at home", max_length=150)
     theme: Literal["auto", "light", "dark"] = "auto"
-    nt: NotificationPrefs = NotificationPrefs()
-    priv: PrivacyPrefs = PrivacyPrefs()
+    nt: NotificationPrefs = Field(default_factory=NotificationPrefs)
+    priv: PrivacyPrefs = Field(default_factory=PrivacyPrefs)

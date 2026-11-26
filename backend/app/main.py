@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import logging
+from typing import Any, AsyncIterator, Dict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
@@ -21,8 +22,8 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Initialize SQLite database tables on startup
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Initialize SQLite tables on startup and close shared HTTP clients on shutdown."""
     init_db()
     logger.info("BreatheWise AI SQLite Database initialized.")
     yield
@@ -56,7 +57,8 @@ app.include_router(settings_router.router, prefix="/api")
 
 
 @app.get("/api/health", tags=["Health"])
-def health_check():
+def health_check() -> Dict[str, Any]:
+    """Return service health, environment metadata, and Gemini readiness."""
     return {
         "status": "healthy",
         "service": "BreatheWise AI Backend",
